@@ -1,0 +1,10 @@
+*.o
+*.so
+scmd
+sgverify
+verify
+bench
+fuzzer
+ftracer
+main
+libsnappyc.so.1
