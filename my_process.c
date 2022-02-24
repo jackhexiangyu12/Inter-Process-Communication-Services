@@ -14,11 +14,11 @@ void main(){
     attr.mq_maxmsg = 10;
     attr.mq_msgsize = 50;
     mq_create = mq_open("/mymq4", O_CREAT | O_RDWR, 0777, &attr);
-    if (mq_create == 0){
-        printf(" messeage que is working\n");
-    
+    if (mq_create == -1){
+        printf(" messeage que is not working\n");
+
     }else{
-        printf("Message queue not working\n");
+        printf("Message queue is working\n");
     }
 
 }

@@ -10,16 +10,16 @@ void main(){
     int mq_ret, len;
     char buf[8192];
 
-    mq_rec_open = mq_open("/mymq2", O_RDONLY);
+    mq_rec_open = mq_open("/mymq4", O_RDONLY);
     mq_ret = mq_receive(mq_rec_open, buf, sizeof(buf), NULL);
 
     printf("message: %s\n",buf);
-    
-    if (mq_ret == 0){
-        printf(" messeage que is working\n");
-    
+
+    if (mq_ret == -1){
+        printf(" messeage que is not working\n");
+
     }else{
-        printf("Message q not working\n");
+        printf("Message q is working\n");
     }
 
 }
