@@ -6,7 +6,7 @@ CFLAGS ?= -Wall -g -O2 -DNDEBUG=1  -DSG=1 -fPIC
 #LDFLAGS += -m32
 
 
-all: scmd verify sgverify libsnappyc.so.1 main
+all: scmd verify sgverify libsnappyc.so.1 main client
 
 task_queue.o: task_queue.c task_queue.h
 
@@ -14,12 +14,20 @@ main.o: main.c
 
 main: main.o task_queue.o
 
+
+client_library.o: client_library.c client_library.h
+
+client.o: client.c
+
+client: client.o client_library.o
+
 snappy.o: snappy.c compat.h snappy-int.h
 
 scmd: scmd.o snappy.o map.o util.o
 
 CLEAN := scmd.o snappy.o scmd bench bench.o fuzzer.o fuzzer map.o verify.o \
-	 verify util.o sgverify sgverify.o snappy.html snappy.man libsnappyc.so.1 main.o main
+	 verify util.o sgverify sgverify.o snappy.html snappy.man libsnappyc.so.1 main.o main \
+	client_library.o client.o client
 
 clean:
 	rm -f ${CLEAN}

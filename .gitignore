@@ -8,3 +8,4 @@ fuzzer
 ftracer
 main
 libsnappyc.so.1
+client
