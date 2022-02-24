@@ -8,9 +8,11 @@ CFLAGS ?= -Wall -g -O2 -DNDEBUG=1  -DSG=1 -fPIC
 
 all: scmd verify sgverify libsnappyc.so.1 main
 
+task_queue.o: task_queue.c task_queue.h
+
 main.o: main.c
 
-main: main.o
+main: main.o task_queue.o
 
 snappy.o: snappy.c compat.h snappy-int.h
 
