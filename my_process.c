@@ -13,7 +13,7 @@ void main(){
     attr.mq_flags = 0;
     attr.mq_maxmsg = 10;
     attr.mq_msgsize = 50;
-    mq_create = mq_open("/mymq4", O_CREAT | O_RDWR, 0777, &attr);
+    mq_create = mq_open("/mymq5", O_CREAT | O_RDWR, 0777, &attr);
     if (mq_create == -1){
         printf(" messeage que is not working\n");
 
