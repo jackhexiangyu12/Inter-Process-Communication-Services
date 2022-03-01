@@ -9,3 +9,5 @@ ftracer
 main
 libsnappyc.so.1
 client
+my_process
+recv
