@@ -1,0 +1,183 @@
+.. c:function:: bool snappy_uncompressed_length (const char *start, size_t n, size_t * result)
+
+   return length of uncompressed output.
+
+**Parameters**
+
+``const char *start``
+  compressed buffer
+
+``size_t n``
+  length of compressed buffer.
+
+``size_t * result``
+  Write the length of the uncompressed output here.
+
+**Description**
+
+Returns true when successfull, otherwise false.
+
+
+.. c:function:: int snappy_compress (struct snappy_env *env, const char *input, size_t input_length, char *compressed, size_t *compressed_length)
+
+   Compress a buffer using the snappy compressor.
+
+**Parameters**
+
+``struct snappy_env *env``
+  Preallocated environment
+
+``const char *input``
+  Input buffer
+
+``size_t input_length``
+  Length of input_buffer
+
+``char *compressed``
+  Output buffer for compressed data
+
+``size_t *compressed_length``
+  The real length of the output written here.
+
+**Description**
+
+Return 0 on success, otherwise an negative error code.
+
+The output buffer must be at least
+snappy_max_compressed_length(input_length) bytes long.
+
+Requires a preallocated environment from snappy_init_env.
+The environment does not keep state over individual calls
+of this function, just preallocates the memory.
+
+
+.. c:function:: int snappy_uncompress (const char *compressed, size_t n, char *uncompressed)
+
+   Uncompress a snappy compressed buffer
+
+**Parameters**
+
+``const char *compressed``
+  Input buffer with compressed data
+
+``size_t n``
+  length of compressed buffer
+
+``char *uncompressed``
+  buffer for uncompressed data
+
+**Description**
+
+The uncompressed data buffer must be at least
+snappy_uncompressed_length(compressed) bytes long.
+
+Return 0 on success, otherwise an negative error code.
+
+
+.. c:function:: int snappy_compress (struct snappy_env *env, const char *input, size_t input_length, char *compressed, size_t *compressed_length)
+
+   Compress a buffer using the snappy compressor.
+
+**Parameters**
+
+``struct snappy_env *env``
+  Preallocated environment
+
+``const char *input``
+  Input buffer
+
+``size_t input_length``
+  Length of input_buffer
+
+``char *compressed``
+  Output buffer for compressed data
+
+``size_t *compressed_length``
+  The real length of the output written here.
+
+**Description**
+
+Return 0 on success, otherwise an negative error code.
+
+The output buffer must be at least
+snappy_max_compressed_length(input_length) bytes long.
+
+Requires a preallocated environment from snappy_init_env.
+The environment does not keep state over individual calls
+of this function, just preallocates the memory.
+
+
+.. c:function:: int snappy_uncompress (const char *compressed, size_t n, char *uncompressed)
+
+   Uncompress a snappy compressed buffer
+
+**Parameters**
+
+``const char *compressed``
+  Input buffer with compressed data
+
+``size_t n``
+  length of compressed buffer
+
+``char *uncompressed``
+  buffer for uncompressed data
+
+**Description**
+
+The uncompressed data buffer must be at least
+snappy_uncompressed_length(compressed) bytes long.
+
+Return 0 on success, otherwise an negative error code.
+
+
+.. c:function:: int snappy_init_env_sg (struct snappy_env *env, bool sg)
+
+   Allocate snappy compression environment
+
+**Parameters**
+
+``struct snappy_env *env``
+  Environment to preallocate
+
+``bool sg``
+  Input environment ever does scather gather
+
+**Description**
+
+If false is passed to sg then multiple entries in an iovec
+are not legal.
+Returns 0 on success, otherwise negative errno.
+Must run in process context.
+
+
+.. c:function:: int snappy_init_env (struct snappy_env *env)
+
+   Allocate snappy compression environment
+
+**Parameters**
+
+``struct snappy_env *env``
+  Environment to preallocate
+
+**Description**
+
+Passing multiple entries in an iovec is not allowed
+on the environment allocated here.
+Returns 0 on success, otherwise negative errno.
+Must run in process context.
+
+
+.. c:function:: void snappy_free_env (struct snappy_env *env)
+
+   Free an snappy compression environment
+
+**Parameters**
+
+``struct snappy_env *env``
+  Environment to free.
+
+**Description**
+
+Must run in process context.
+
+
