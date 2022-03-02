@@ -20,7 +20,7 @@ CLIENT_OBJECTS = client.o client_library.o
 client: $(CLIENT_OBJECTS)
 	$(CC) $(CFLAGS) $(CLIENT_OBJECTS) -o client $(LDFLAGS)
 
-main.o: main.c include.h
+main.o: main.c include.h snappy.h
 
 MAIN_OBJECTS = main.o task_queue.o
 main: $(MAIN_OBJECTS)
