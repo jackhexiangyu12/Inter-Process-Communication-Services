@@ -43,7 +43,8 @@ void return_compressed_data(unsigned char *compressed_data, unsigned long compre
   memmove(sh_mem, compressed_data, compressed_len);
 
   char return_message_buf[218];
-  sprintf(return_message_buf, "%d", segment_id);
+  sprintf(return_message_buf, "%lu:%d", compressed_len, segment_id);
+  // compressed_len:segment_id
 
 
   mqd_t return_q = mq_open(mqPath, O_WRONLY);
@@ -82,7 +83,7 @@ void extract_mqID(char *mqMessage, char **mq_id) {
 }
 
 void handle_request(char *mqMessage) {
-  // buf now holds the string of: <7 char id><segment id number>
+  // buf now holds the string of: <7 char id><file_len as unsigned long>:<segment id number>
 
   // extract mq_id from the message
   char mq_id[8];
@@ -90,6 +91,19 @@ void handle_request(char *mqMessage) {
   mq_id[QUEUE_ID_LEN] = '\0';
 
   printf("return q id: %s\n", mq_id);
+
+  int i = QUEUE_ID_LEN;
+  int j = 0;
+  char dataLenBuffer[64];
+  while (mqMessage[i] != ':') {
+    dataLenBuffer[j] = mqMessage[i];
+    i++;
+    j++;
+  }
+  dataLenBuffer[j] = '\0';
+
+  char **f;
+  unsigned long data_len = strtoul(dataLenBuffer, f, 10);
 
 
   int segment_id = extract_segment_id(mqMessage);

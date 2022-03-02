@@ -37,7 +37,7 @@ void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *retu
   /* printf("virtual address: %d\n", (int) sh_mem); */
 
   //char * text = "hello there\n";
-  memmove(sh_mem, data, file_len );
+  memmove(sh_mem, data, file_len);
 
 
   // random number generator init
@@ -62,14 +62,14 @@ void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *retu
   char idPath[9];
   sprintf(idPath, "/%d", randomId);
 
-  mqd_t mq_return = mq_open(idPath, O_CREAT | O_RDWR, 0777, &attr);
-  *return_q_ptr = mq_return;
+  *return_q_ptr = mq_open(idPath, O_CREAT | O_RDWR, 0777, &attr);
+
   // need to error check to see that this queue is new
 
   char buf[8192]; // figure out what this is for
 
   printf("segment id: %d\n", segment_id);
-  sprintf(buf, "%d%d", randomId, segment_id); // id, then stringified segment id
+  sprintf(buf, "%d%lu:%d", randomId, file_len, segment_id); // id, then stringified segment id
   int len = strlen(buf);
   printf("the q id: %d\n", randomId);
   printf("the whole message: %s\n", buf);
@@ -107,7 +107,21 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len) {
   mq_unlink(idPath);
 
 
-  // just need to grab the segment id from the message
+  // size:segment_id in the return_message_buffer
+
+  // need to grab the compressed len and the segment id from the message
+  int i =  0;
+  char compressedLenBuffer[64];
+  while (return_message_buffer[i] != ':') {
+    // then we know stuff
+    compressedLenBuffer[i] = return_message_buffer[i];
+    i++;
+  }
+  compressedLenBuffer[i] = '\0';
+
+  char **f;
+  unsigned long compressed_len = strtoul(compressedLenBuffer, f, 10);
+
 
   int segment_id = atoi(return_message_buffer);
 
@@ -116,9 +130,13 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len) {
   // memcpy stuff from shared mem to the compressed data buffer
   // TODO:
 
+  unsigned char *compressed_data_buffer = (char *) malloc(compressed_len);
 
-  unsigned char *compressed_buffer;
-  return compressed_buffer;
+
+  memcpy(compressed_data_buffer, sh_mem, compressed_len);
+
+
+  return compressed_data_buffer;
 }
 
 void print_stuff() {
