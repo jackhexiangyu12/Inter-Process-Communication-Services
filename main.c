@@ -30,7 +30,7 @@ mqd_t setup_main_q() {
 }
 
 // need function where you give it a byte array, and it puts a proper shared memory message on q
-void return_compressed_data(unsigned char *compressed_data, unsigned long compressed_len, char *mqId) {
+void return_compressed_data(char *compressed_data, unsigned long compressed_len, char *mqId) {
   char mqPath[100];
   sprintf(mqPath, "/%s", mqId);
 
@@ -126,15 +126,15 @@ void handle_request(char *mqMessage) {
   /* sprintf(messageBuff, "modified message string : %s", "fake message"); */
 
 
-  unsigned char *compressed_file;
+  char *compressed_file;
 
   // now need to do the actual compression, and get a length of the compressed file
-  unsigned long compressed_file_length;
+  unsigned long compressed_file_length = 0;
   // TODO:
   struct snappy_env env;
-  snappy_free_env(&env);
-  
-  snappy_compress(&env, sh_mem, 8192, compressed_file, &compressed_file_length);
+  snappy_init_env(&env);
+
+  snappy_compress(&env, sh_mem, data_len, compressed_file, &compressed_file_length);
 
 
 
