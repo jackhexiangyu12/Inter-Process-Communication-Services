@@ -90,20 +90,20 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len) {
   // qclient.c code here
   // but not the file reader part
 
-  mqd_t *return_q;
-  int * return_q_id;
-  send_original_file(data, file_len, return_q, return_q_id);
+  mqd_t return_q;
+  int  return_q_id = 0;
+  send_original_file(data, file_len, &return_q, &return_q_id);
 
   char return_message_buffer[64]; // should probably unify these sizes
 
   // now do sync call to wait to receive a message back
-  mq_receive(*return_q, return_message_buffer, sizeof(return_message_buffer), NULL);
+  mq_receive(return_q, return_message_buffer, sizeof(return_message_buffer), NULL);
   /* printf("message queue has: %s\n", return_message_buffer); */
 
   // now destroy the message queue that was used to get the compressed file back
-  mq_close(*return_q);
+  mq_close(return_q);
   char idPath[9];
-  sprintf(idPath, "/%d", *return_q_id);
+  sprintf(idPath, "/%d", return_q_id);
   mq_unlink(idPath);
 
 

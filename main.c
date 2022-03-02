@@ -106,11 +106,15 @@ void handle_request(char *mqMessage) {
   /* sprintf(messageBuff, "modified message string : %s", "fake message"); */
 
 
-  unsigned char compressed_file[1];
+  unsigned char *compressed_file;
 
   // now need to do the actual compression, and get a length of the compressed file
   unsigned long compressed_file_length;
   // TODO:
+  struct snappy_env env;
+  snappy_free_env(&env);
+  
+  snappy_compress(&env, sh_mem, 8192, compressed_file, &compressed_file_length);
 
 
 
