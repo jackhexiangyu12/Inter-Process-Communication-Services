@@ -1,4 +1,6 @@
-CFLAGS ?= -Wall -g -O2 -DNDEBUG=1  -DSG=1 -fPIC
+CC = gcc
+CFLAGS ?= -Wall -g -O2 -DNDEBUG=1  -DSG=1 -fPIC -lrt
+LDFLAGS = -lrt
 # Remove -DSG=1 if you don't need scather-gather support
 # NDEBUG=1 is recommended for production
 
@@ -6,20 +8,24 @@ CFLAGS ?= -Wall -g -O2 -DNDEBUG=1  -DSG=1 -fPIC
 #LDFLAGS += -m32
 
 
-all: scmd verify sgverify libsnappyc.so.1 main client
+all: scmd verify sgverify libsnappyc.so.1 client main
 
 task_queue.o: task_queue.c task_queue.h
 
-main.o: main.c
-
-main: main.o task_queue.o
-
-
-client_library.o: client_library.c client_library.h
+client_library.o: client_library.c client_library.h include.h
 
 client.o: client.c
 
-client: client.o client_library.o
+CLIENT_OBJECTS = client.o client_library.o
+client: $(CLIENT_OBJECTS)
+	$(CC) $(CFLAGS) $(CLIENT_OBJECTS) -o client $(LDFLAGS)
+
+main.o: main.c include.h
+
+MAIN_OBJECTS = main.o task_queue.o
+main: $(MAIN_OBJECTS)
+	$(CC) $(CFLAGS) $(MAIN_OBJECTS) -o main $(LDFLAGS)
+
 
 snappy.o: snappy.c compat.h snappy-int.h
 
