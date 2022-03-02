@@ -97,6 +97,7 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len) {
   char return_message_buffer[64]; // should probably unify these sizes
 
   // now do sync call to wait to receive a message back
+  printf("about to read from the return q\n");
   mq_receive(return_q, return_message_buffer, sizeof(return_message_buffer), NULL);
   /* printf("message queue has: %s\n", return_message_buffer); */
 

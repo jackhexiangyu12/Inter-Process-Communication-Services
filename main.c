@@ -61,20 +61,24 @@ void return_compressed_data(unsigned char *compressed_data, unsigned long compre
   // dont need anything else?
 }
 
-int extract_segment_id(char *mqMessage) {
+int extract_segment_id(char *mqMessage, int colon_index) {
   // extract the segment id from the message
-  int i = 7;
-  int j = 0;
-  char segment_id_str_buffer[100];
-  while (mqMessage[i] != '\0') {
-    segment_id_str_buffer[j] = mqMessage[i];
 
+  char segIdCharBuf[200];
+
+  int i = colon_index + 1;
+  int j = 0;
+  while (mqMessage[i] != '\0') {
+    segIdCharBuf[j] = mqMessage[i];
     i++;
     j++;
   }
-  segment_id_str_buffer[j + 1] = '\0';
 
-  int segment_id = atoi(segment_id_str_buffer);
+  segIdCharBuf[j] = '\0';
+  printf("buffer pre conversion: %s\n", segIdCharBuf);
+  printf("colon index: %d\n", colon_index);
+
+  int segment_id = atoi(segIdCharBuf);
   return segment_id;
 }
 
@@ -83,7 +87,8 @@ void extract_mqID(char *mqMessage, char **mq_id) {
 }
 
 void handle_request(char *mqMessage) {
-  // buf now holds the string of: <7 char id><file_len as unsigned long>:<segment id number>
+  printf("message received: %s\n", mqMessage);
+  // buf now holds the string of: <7 char id for the mq><file_len as unsigned long>:<segment id number>
 
   // extract mq_id from the message
   char mq_id[8];
@@ -104,9 +109,10 @@ void handle_request(char *mqMessage) {
 
   char **f;
   unsigned long data_len = strtoul(dataLenBuffer, f, 10);
+  printf("data length: %lu\n", data_len);
 
 
-  int segment_id = extract_segment_id(mqMessage);
+  int segment_id = extract_segment_id(mqMessage, i);
 
   printf("segment id: %d\n", segment_id);
 
