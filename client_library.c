@@ -132,7 +132,7 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len) {
   // TODO:
 
   unsigned char *compressed_data_buffer = (char *) malloc(compressed_len);
-
+  
 
   memcpy(compressed_data_buffer, sh_mem, compressed_len);
 

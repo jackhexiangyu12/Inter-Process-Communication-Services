@@ -11,10 +11,11 @@ int main(int argc, char *argv[]) {
   //Create and open file for send
   unsigned char *buffer;
   unsigned long file_len;
-  FILE *file;
+  FILE *file, *file1;
 
   //open the file
   file = fopen("client_input.txt", "r+");
+  file1 = fopen("compressed", "rw");
   if (file == NULL) {
     fprintf(stderr, "Unable to open file %s\n", argv[1]);
     return 1;
@@ -37,5 +38,9 @@ int main(int argc, char *argv[]) {
   fread(buffer,file_len,sizeof(unsigned char),file);
   fclose(file);
 
+  
   char * compressed_file_buffer = sync_compress(buffer, file_len);
+  fprintf(file1, "The text: %s\n", compressed_file_buffer);
+  
+  
 }

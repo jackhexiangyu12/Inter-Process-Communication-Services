@@ -39,12 +39,13 @@ void return_compressed_data(char *compressed_data, unsigned long compressed_len,
   int segment_id = shmget(IPC_PRIVATE, compressed_len, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
 
   char *sh_mem = (char *) shmat(segment_id, NULL, 0);
+  
 
   memmove(sh_mem, compressed_data, compressed_len);
-
   char return_message_buf[218];
-  sprintf(return_message_buf, "%lu:%d", compressed_len, segment_id);
+  sprintf(return_message_buf, "%d:%lu",segment_id , compressed_len);
   // compressed_len:segment_id
+  
 
 
   mqd_t return_q = mq_open(mqPath, O_WRONLY);
@@ -126,15 +127,16 @@ void handle_request(char *mqMessage) {
   /* sprintf(messageBuff, "modified message string : %s", "fake message"); */
 
 
-  char *compressed_file;
+  char compressed_file[data_len];
 
   // now need to do the actual compression, and get a length of the compressed file
-  unsigned long compressed_file_length = 0;
+  unsigned long compressed_file_length = data_len;
   // TODO:
   struct snappy_env env;
   snappy_init_env(&env);
 
-  snappy_compress(&env, sh_mem, data_len, compressed_file, &compressed_file_length);
+  //snappy_compress(&env, sh_mem, data_len, compressed_file, &compressed_file_length);
+  memmove(compressed_file, sh_mem, data_len);
 
 
 
@@ -200,6 +202,6 @@ int main() {
 
     // this is just some stub stuff to make sure the makefile works
     active_q * tq = get_active_q();
-    dont_halt = tq->stub;
+    //dont_halt = tq->stub;
   }
 }
