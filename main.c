@@ -12,10 +12,15 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/shm.h>
+#include <pthread.h>
 
 #include "snappy.h"
 #include "task_queue.h"
 #include "include.h"
+
+typedef struct thread_arg_payload {
+  mqd_t main_q;
+} thread_arg_t;
 
 
 mqd_t setup_main_q() {
@@ -39,13 +44,13 @@ void return_compressed_data(char *compressed_data, unsigned long compressed_len,
   int segment_id = shmget(IPC_PRIVATE, compressed_len, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
 
   char *sh_mem = (char *) shmat(segment_id, NULL, 0);
-  
+
 
   memmove(sh_mem, compressed_data, compressed_len);
   char return_message_buf[218];
   sprintf(return_message_buf, "%d:%lu",segment_id , compressed_len);
   // compressed_len:segment_id
-  
+
 
 
   mqd_t return_q = mq_open(mqPath, O_WRONLY);
@@ -154,6 +159,32 @@ void handle_request(char *mqMessage) {
 
 }
 
+static void *listen_thread(void *arg) {
+  thread_arg_t *thread_arg = (thread_arg_t *) arg;
+
+
+  while (1) {
+    // put current task onto the active queue
+
+    // check message queue for task
+    // if no task, check active queue and switch to it
+    // if message queue has a task, need to make new uthread for that task
+    char recieve_buffer[8192];
+
+    int mq_ret = mq_receive(thread_arg->main_q, recieve_buffer, sizeof(recieve_buffer), NULL);
+
+    if (mq_ret == -1) {
+      printf(" messeage que is not working\n");
+
+    } else {
+      printf("Message q is working\n");
+    }
+
+    handle_request(recieve_buffer);
+  }
+
+  return NULL;
+}
 
 int main() {
   /*
@@ -173,35 +204,35 @@ int main() {
     return 1;
   }
 
-  mqd_t mq_rec_open;
-  int mq_ret;
+  mqd_t main_q = mq_open(MAIN_QUEUE_PATH, O_RDONLY);
+
+  thread_arg_t * thread_arg = malloc(sizeof(thread_arg_t));
+  if (thread_arg == NULL) {
+    // out of memory
+    printf("out of mem\n");
+    return 1;
+  }
+  thread_arg->main_q = main_q;
+
+  pthread_t listen_thread_id;
+  pthread_create(&listen_thread_id, NULL, listen_thread, (void *)thread_arg);
+
 
   int dont_halt = 1;
+  char command_buffer[128];
   while (dont_halt) {
-    // put current task onto the active queue
+    // command line stuff here
+    printf("cmd> ");
+    fgets(command_buffer, 128, stdin);
 
-    // check message queue for task
-    // if no task, check active queue and switch to it
-    // if message queue has a task, need to make new uthread for that task
-    char recieve_buffer[8192];
-
-    mq_rec_open = mq_open(MAIN_QUEUE_PATH, O_RDONLY);
-    mq_ret = mq_receive(mq_rec_open, recieve_buffer, sizeof(recieve_buffer), NULL);
-
-    if (mq_ret == -1) {
-      printf(" messeage que is not working\n");
-
-    } else {
-      printf("Message q is working\n");
+    const char *killCmd = "stop\n";
+    if (strcmp(killCmd, command_buffer) == 0) {
+      // flush the main queue
+      mq_close(main_q);
+      mq_unlink(MAIN_QUEUE_PATH);
+      dont_halt = 0;
     }
-
-    handle_request(recieve_buffer);
-
-
-
-
-    // this is just some stub stuff to make sure the makefile works
-    active_q * tq = get_active_q();
-    //dont_halt = tq->stub;
   }
+  // kill other threads here
+  pthread_kill(listen_thread_id, SIGKILL);
 }
