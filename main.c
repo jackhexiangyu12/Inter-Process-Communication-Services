@@ -92,7 +92,8 @@ void extract_mqID(char *mqMessage, char **mq_id) {
   // cant figure this pointer stuff out
 }
 
-void handle_request(char *mqMessage) {
+void *handle_request(void *buffer) {
+  char *mqMessage = buffer;
   printf("message received: %s\n", mqMessage);
   // buf now holds the string of: <7 char id for the mq><file_len as unsigned long>:<segment id number>
 
@@ -157,6 +158,8 @@ void handle_request(char *mqMessage) {
   /* printf("%s\n", mqPath); */
   return_compressed_data(compressed_file, compressed_file_length, mq_id);
 
+  pthread_exit(0);
+  return NULL;
 }
 
 static void *listen_thread(void *arg) {
@@ -171,6 +174,7 @@ static void *listen_thread(void *arg) {
     // if message queue has a task, need to make new uthread for that task
     char recieve_buffer[8192];
 
+    // blocking call
     int mq_ret = mq_receive(thread_arg->main_q, recieve_buffer, sizeof(recieve_buffer), NULL);
 
     if (mq_ret == -1) {
@@ -179,8 +183,10 @@ static void *listen_thread(void *arg) {
     } else {
       printf("Message q is working\n");
     }
+    // TODO: add stuff to some pthread list
+    pthread_t request_handler_id;
+    pthread_create(&request_handler_id, NULL, handle_request, (void *)recieve_buffer);
 
-    handle_request(recieve_buffer);
   }
 
   return NULL;
