@@ -26,6 +26,9 @@ typedef struct thread_arg_payload {
 
 shared_memory_info mem_info;
 
+object_q task_q;
+object_q client_q;
+
 
 mqd_t setup_main_q() {
   mqd_t mq_create;
@@ -233,6 +236,21 @@ int main() {
     mem_info.data_array[i].segment_id = segment_id;
     mem_info.data_array[i].in_use = 0;
   }
+
+
+  if (pthread_mutex_init(&task_q.lock, NULL) != 0) {
+    printf("mutex init fail\n");
+    return 1;
+  }
+
+  if (pthread_mutex_init(&client_q.lock, NULL) != 0) {
+    printf("mutex init fail\n");
+    return 1;
+  }
+
+  client_q.list_head = NULL;
+  task_q.list_head = NULL;
+
 
   mqd_t setup_result = setup_main_q();
   if (setup_result == -1) {
