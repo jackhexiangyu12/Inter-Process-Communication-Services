@@ -89,5 +89,11 @@ task_node *remove_head(object_q *q) {
     // return error -- TODO
     return NULL;
   }
-  return NULL;
+
+  task_node *return_node = q->list_head;
+
+  q->list_head = return_node->next;
+
+
+  return return_node;
 }
