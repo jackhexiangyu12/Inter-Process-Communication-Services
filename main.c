@@ -24,6 +24,9 @@ typedef struct thread_arg_payload {
 } thread_arg_t;
 
 
+shared_memory_info mem_info;
+
+
 mqd_t setup_main_q() {
   mqd_t mq_create;
   struct mq_attr attr;
@@ -204,6 +207,32 @@ int main() {
 
 
    */
+
+
+  // hardcode until get arg parsing
+  int segment_count = 5;
+  int segment_size_in_bytes = 1028;
+
+  mem_info.seg_count = segment_count;
+  mem_info.seg_size = segment_size_in_bytes;
+
+  if (pthread_mutex_init(&mem_info.lock, NULL) != 0) {
+    printf("mutex init fail\n");
+    return 1;
+  }
+
+  mem_info.data_array = malloc(sizeof(seg_data_t) * segment_count);
+  if (mem_info.data_array == NULL) {
+    printf("out of mem\n");
+    return 1;
+  }
+
+  for (int i = 0; i < segment_count; i++) {
+    /* mem_info.data_array[i]; */
+    int segment_id = shmget(IPC_PRIVATE, segment_size_in_bytes, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    mem_info.data_array[i].segment_id = segment_id;
+    mem_info.data_array[i].in_use = 0;
+  }
 
   mqd_t setup_result = setup_main_q();
   if (setup_result == -1) {
