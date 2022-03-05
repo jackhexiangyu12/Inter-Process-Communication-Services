@@ -16,6 +16,7 @@
 
 #include "snappy.h"
 #include "task_queue.h"
+#include "client_library.h"
 #include "include.h"
 
 typedef struct thread_arg_payload {
