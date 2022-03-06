@@ -169,6 +169,75 @@ void *handle_request(void *buffer) {
   return NULL;
 }
 
+static void *work_thread(void *arg) {
+  // idk what args to use
+  while (1) {
+    pthread_mutex_lock(&task_q.lock);
+    if (queue_size(&task_q) > 0) {
+      // then do stuff
+
+      task_node *current_task = remove_head(&task_q);
+      pthread_mutex_unlock(&task_q.lock);
+
+      ctask task = *current_task->task;
+
+      // read the data from the segment
+      int segment_id = task.segment_id;
+
+
+      char *sh_mem = (char *) shmat(segment_id, NULL, 0);
+
+      // TODO:
+      // do snappy compress or something
+      // put the compressed data back on the shared memory
+
+
+
+
+      // tell the client that the segment is compressed
+
+      char mqPath[128];
+      sprintf(mqPath, "/%d", task.message_queue_id);
+
+      char return_message_buf[128];
+      sprintf(return_message_buf, "%d%d", IS_COMPRESSED_MSG, segment_id);
+
+      mqd_t client_mq = mq_open(mqPath, O_RDWR);
+
+      int ret_status = mq_send(client_mq, return_message_buf, strlen(return_message_buf) + 1, 0);
+
+      // wait for client to respond with DONE
+
+      // blocking
+      ret_status = mq_receive(client_mq, return_message_buf, sizeof(return_message_buf), NULL);
+      // TODO: parse message for error handling
+      // for now, assume any message means DONE
+
+      // then free the segment
+
+      pthread_mutex_lock(&mem_info.lock);
+      mem_info.data_array[task.segment_index].in_use = 0;
+      mem_info.used_seg_count--;
+      pthread_mutex_unlock(&mem_info.lock);
+
+    } else {
+      pthread_mutex_unlock(&task_q.lock);
+    }
+  }
+
+  // pop the work q
+  // if nothing, keep looping
+  // if something, do work until done
+  // put compressed data on the segment -- overwrite uncompressed data
+  // once done, tell the client that the segment is compressed
+  // the client then puts that segment into a buffer
+  // the client then tells us that it read the segment
+  // we then free the segment to be used by other clients
+
+
+  return NULL;
+}
+
 static void *listen_thread(void *arg) {
   thread_arg_t *thread_arg = (thread_arg_t *) arg;
 

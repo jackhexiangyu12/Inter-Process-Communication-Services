@@ -2,7 +2,10 @@
 
 typedef struct compression_task {
   // idk what metadata this needs - should copy from uthreads
-  int stuff;
+  int message_queue_id;
+  int segment_id;
+  int data_len;
+  int segment_index;
 } ctask;
 
 typedef struct client_task {

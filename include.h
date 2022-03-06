@@ -20,3 +20,5 @@ typedef struct segment_metadata {
   int seg_size;
   pthread_mutex_t lock;
 } shared_memory_info;
+
+#define IS_COMPRESSED_MSG (0)
