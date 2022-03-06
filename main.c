@@ -98,7 +98,36 @@ int extract_segment_id(char *mqMessage, int colon_index) {
 void extract_mqID(char *mqMessage, char **mq_id) {
   // cant figure this pointer stuff out
 }
+void *check_clientq(){
+  while(1){
+    if (mem_info.used_seg_count < mem_info.seg_count){
+      pthread_mutex_lock(&client_q.lock);
+      if (queue_size(&client_q) > 1 ){
+        pthread_mutex_lock(&mem_info.lock);
+        mem_info.used_seg_count++;
+        // gets the head of the client queue
+        task_node *curr_client = remove_head(&client_q);
 
+        // finds a free segment id in the list of segments
+        int seg_id;
+        for( int i  = 0; i < mem_info.seg_count; i++ ){
+          if (!mem_info.data_array[i].in_use){
+            seg_id = mem_info.data_array[i].segment_id;
+            mem_info.data_array[i].in_use = 1;
+            break;
+          }
+        }
+
+        // gets the messageid
+        char *client_msg_q = curr_client->client->message_queue_id;
+        
+
+        // assign process to segment
+      }
+      pthread_mutex_unlock(&client_q.lock);
+    }
+  }
+}
 void *handle_request(void *buffer) {
   char *mqMessage = buffer;
   printf("message received: %s\n", mqMessage);

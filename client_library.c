@@ -28,16 +28,11 @@
 
 void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *return_q_ptr, int *return_q_id) {
   mqd_t mq_snd_open = mq_open(MAIN_QUEUE_PATH, O_WRONLY);
-
   // make shared memory here
-  int segment_id = shmget(IPC_PRIVATE, file_len, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-
-  char *sh_mem = (char *) shmat(segment_id, NULL, 0);
 
   /* printf("virtual address: %d\n", (int) sh_mem); */
 
   //char * text = "hello there\n";
-  memmove(sh_mem, data, file_len);
 
 
   // random number generator init
@@ -68,12 +63,10 @@ void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *retu
 
   char buf[8192]; // figure out what this is for
 
-  printf("segment id: %d\n", segment_id);
-  sprintf(buf, "%d%lu:%d", randomId, file_len, segment_id); // id, then stringified segment id
+  sprintf(buf, "%d%lu", randomId, file_len); // id, then stringified segment id
   int len = strlen(buf);
   printf("the q id: %d\n", randomId);
   printf("the whole message: %s\n", buf);
-
 
   int mq_ret = mq_send(mq_snd_open, buf, len+1, 0);
   if (mq_ret == -1){
@@ -82,6 +75,10 @@ void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *retu
   }else{
     printf("Message q is working\n");
   }
+
+  // wait for reply with segment id to be used
+  
+
 
 
 }
