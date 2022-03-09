@@ -72,13 +72,72 @@ int establish_communicator_channel(unsigned long file_len, mqd_t *return_q_ptr) 
   return randomId;
 }
 
+
+int *parse_server_message(char *message_buffer, unsigned long *file_len, int *seg_count, int *seg_size) {
+
+  int i = 0;
+  char seg_size_str[64];
+  while (message_buffer[i] != ',') {
+    seg_size_str[i] = message_buffer[i];
+    i++;
+  }
+  seg_size_str[i] = '\0';
+  *seg_size = atoi(seg_size_str);
+
+  i++; // skip over comma
+  char seg_count_str[64];
+  int indx = 0;
+  while (message_buffer[i] != ',') {
+    seg_count_str[indx] = message_buffer[i];
+    i++;
+    indx++;
+  }
+  seg_count_str[indx] = '\0';
+  i++; // skip over comma
+
+  *seg_count = atoi(seg_count_str);
+
+
+  char file_len_str[64];
+  int flInx = 0;
+  while (message_buffer[i] != ',') {
+    file_len_str[flInx] = message_buffer[i];
+    i++;
+    flInx++;
+  }
+  file_len_str[flInx] = '\0';
+  i++; // skip over comma
+
+  char **f;
+  unsigned long f_len = strtoul(file_len_str, f, 10);
+  *file_len = f_len;
+
+  int *seg_array = calloc(*seg_count, sizeof(int));
+
+  for (int index = 0; index < *seg_count; index++) {
+
+    char seg_id_str[64];
+    int ind = 0;
+    while (message_buffer[i] != ',') {
+      seg_id_str[ind] = message_buffer[i];
+      i++;
+      ind++;
+    }
+    seg_id_str[ind] = '\0';
+    i++;
+    seg_array[index] = atoi(seg_id_str);
+  }
+
+  return seg_array;
+}
+
 void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *private_q) {
 
   // wait for segment id
 
   // TODO: get the segment ids in this protocol
 
-  // <number of bytes in a segment>,<number of segment ids>,<first segment id>,<second segment id>
+  // <number of bytes in a segment>,<number of segment ids>,<first segment id>,...<last segment id>,
 
   // for now, hardcode the size, and only work with one segment id
 
@@ -92,69 +151,130 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *pri
   //  sending, and then put all the compressed pieces back together
 
 
+  char recv_buff[2048 * 4];
+  int status = mq_receive(*private_q, recv_buff, sizeof(recv_buff), NULL);
+
+  // get segment size from preliminary message
+
+  // TODO: correct????
+  int seg_count = 0;
+  int seg_size = 0;
+  unsigned long f_len = 0;
+  int *seg_array = parse_server_message(recv_buff, &f_len, &seg_count, &seg_size);
+  free(seg_array);
+
+  // seg_size, seg_array, seg_count
+
+  int segments_needed = (file_len / seg_size);
+  if (file_len % seg_size != 0)
+    segments_needed++;
+
+  int segments_to_recv = segments_needed;
+
+  int ii = 0;
+  while (ii < segments_needed) {
+    // blocking call - the server sends one each time data is ready to be accepted
+    int stat = mq_receive(*private_q, recv_buff, sizeof(recv_buff), NULL);
+
+    ///// reparse here
+    seg_count = 0;
+    seg_size = 0;
+    seg_array = parse_server_message(recv_buff, &f_len, &seg_count, &seg_size);
 
 
 
 
-  /*
+    // need to put data onto the segments before signaling an ACK to the server
+    for (int j = 0; j < seg_count; j++) {
+      if (segments_to_recv == 0)
+        break; // yeet -- dont run over the limit or something
+      segments_to_recv--;
 
-    temp starter code:
+      int segment_id = seg_array[j];
+      char *sh_mem = (char *) shmat(segment_id, NULL, 0);
 
-    wait for segment id
+      int offset = ((j + ii) * seg_size);
+      if (segments_to_recv == 0) {
+        // TODO: if segments to recv == 0, then instead of seg_size, need to figure out the end of the buffer
+        int len = file_len - offset;
+        memcpy(sh_mem, data + (offset), len);
+      } else {
+        memcpy(sh_mem, data + (offset), seg_size);
+      }
 
-    put data on the segment
+    }
+    free(seg_array);
 
-    send an OK message to server
-   */
+    // now send ACK to the server
+    stat = mq_send(*private_q, "OK", 3, 0);
 
-  char recv_buff[2048]; // need to figure out max size of message
-  mq_receive(*private_q, recv_buff, sizeof(recv_buff), NULL);
+    ii += seg_count;
+  }
 
-
-  // just assume that the recv_buff can be parsed to a segment id
-
-  int segment_id = atoi(recv_buff);
-
-  char *sh_mem = (char *) shmat(segment_id, NULL, 0);
-
-  memcpy(sh_mem, data, file_len);
-
-  // send OK to server
-
-  mq_send(*private_q, "OK", 3, NULL);
-
+  // TODO: anything else?
 }
 
-void receive_compressed_data(mqd_t *private_q, char **comp_data_buffer, unsigned long file_len) {
-  // TODO: remove file len - I think?
+void receive_compressed_data(mqd_t *private_q, char **comp_data_buffer, unsigned long *compressed_len) {
+  // server sends preliminary message for this transaction too -- just makes things easier
+  // preliminary message has the segment size and the compressed len size
+  char recv_buff[2048 * 4];
+  int status = mq_receive(*private_q, recv_buff, sizeof(recv_buff), NULL);
 
-  char buffer[64];
-  // wait for compressed data signal from server
-  mq_receive(*private_q, buffer, sizeof(buffer), NULL);
+  // get segment size from preliminary message
 
-  // the signal will tell me that compressed data is ready to grab
+  // TODO: correct????
+  int seg_count = 0;
+  int seg_size = 0;
+  int *seg_array = parse_server_message(recv_buff, compressed_len, &seg_count, &seg_size);
+  free(seg_array);
 
-  // it will come in this protocol -- same as the other one
+  // seg_size, seg_array, seg_count
 
-  // <number of bytes in a segment>,<number of segment ids>,<first segment id>,<second segment id>
+  int segments_needed = (*compressed_len / seg_size);
+  if (*compressed_len % seg_size != 0)
+    segments_needed++;
 
-  // but for now, just assume that we get 1 segment id
-  int segment_id = atoi(buffer);
+  int segments_to_recv = segments_needed;
 
-  char *sh_mem = (char *) shmat(segment_id, NULL, 0);
+  int ii = 0;
+  while (ii < segments_needed) {
+    // blocking call - the server sends one each time data is ready to be accepted
+    int stat = mq_receive(*private_q, recv_buff, sizeof(recv_buff), NULL);
 
-  memcpy(*comp_data_buffer, sh_mem, file_len);
+    ///// reparse here
+    seg_count = 0;
+    seg_size = 0;
+    seg_array = parse_server_message(recv_buff, compressed_len, &seg_count, &seg_size);
 
 
-  // once I copy all the data into the compressed data buffer,
-  //  tell the server that I got the data
 
-  // will be complicated if needs multiple passes to send the data back
 
-  char send_buff[64];
-  sprintf(send_buff, "GOT");
-  mq_send(*private_q, send_buff, strlen(send_buff) + 1, 0);
+    // need to put data onto the segments before signaling an ACK to the server
+    for (int j = 0; j < seg_count; j++) {
+      if (segments_to_recv == 0)
+        break; // yeet -- dont run over the limit or something
+      segments_to_recv--;
 
+      int segment_id = seg_array[j];
+      char *sh_mem = (char *) shmat(segment_id, NULL, 0);
+
+      int offset = ((j + ii) * seg_size);
+      if (segments_to_recv == 0) {
+        // TODO: if segments to recv == 0, then instead of seg_size, need to figure out the end of the buffer
+        int len = *compressed_len - offset;
+        memcpy(*comp_data_buffer + (offset), sh_mem, len);
+      } else {
+        memcpy(*comp_data_buffer + (offset), sh_mem, seg_size);
+      }
+
+    }
+    free(seg_array);
+
+    // now send ACK to the server
+    stat = mq_send(*private_q, "OK", 3, 0);
+
+    ii += seg_count;
+  }
 }
 
 
@@ -289,7 +409,7 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len, unsig
   char *compressed_data_buffer = (char *) malloc(file_len);
 
   // we dont need threads for sync mode
-  receive_compressed_data(&private_q, &compressed_data_buffer, file_len);
+  receive_compressed_data(&private_q, &compressed_data_buffer, compressed_len);
 
   // now destroy the message queue that was used to get the compressed file back
   mq_close(private_q);

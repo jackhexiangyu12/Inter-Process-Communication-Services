@@ -103,20 +103,16 @@ int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
   return amount_to_grab;
 }
 
-void prep_segment_availability_message(char **message_buffer, int segments_available_count, seg_data_t ***available_segments) {
-    sprintf(*message_buffer, "%d,%d,", mem_info.seg_size, segments_available_count);
+void prep_segment_avail_metadata_msg(char **message_buffer, unsigned long file_len, int segments_available_count, seg_data_t ***available_segments) {
+  sprintf(*message_buffer, "%d,%d,%lu", mem_info.seg_size, segments_available_count, file_len);
 
     // now put the segment ids into the buffer, horribly (im sorry)
 
-    for (int i = 0; i < segments_available_count - 1; i++) {
+    for (int i = 0; i < segments_available_count; i++) {
       char tmp[2048];
       memcpy(tmp, *message_buffer, strlen(*message_buffer)); // bc idk if this would work without copying
       sprintf(*message_buffer, "%s%d,", tmp, (*available_segments)[i]->segment_id);
     }
-    // now do the last one without a trailing comma
-    char tmp[2048];
-    memcpy(tmp, *message_buffer, strlen(*message_buffer)); // bc idk if this would work without copying
-    sprintf(*message_buffer, "%s%d", tmp, (*available_segments)[segments_available_count - 1]->segment_id);
 }
 
 // this thread is the client q handler
@@ -147,13 +143,26 @@ void *check_clientq() {
     // time for some unholy hacks bc im too lazy to code it correctly bc imagine having String.join() in a programming language standard library
 
     char *message_buffer = calloc(2048, sizeof(char));
-    prep_segment_availability_message(&message_buffer, available_segment_count, &available_segments);
+    // TODO: ok to send zero as file len?
+    prep_segment_avail_metadata_msg(&message_buffer, 0, available_segment_count, &available_segments);
 
     // now the message buffer is good to be sent to the client
 
     char messagePath[128];
     sprintf(messagePath, "/%d", curr_client->client->message_queue_id);
     mqd_t client_mq = mq_open(messagePath, O_RDWR);
+
+
+    // send the preliminary data message to client, then send the availability message
+
+    int ret_stat = mq_send(client_mq, message_buffer, strlen(message_buffer) + 1, 0);
+
+    if (ret_stat == -1) {
+      printf(" messeage que is not working\n");
+
+    } else {
+      printf("Message q is working\n");
+    }
 
 
 
@@ -163,7 +172,9 @@ void *check_clientq() {
 
     char *file_buffer = (char *) malloc(sizeof(char) * curr_client->client->file_len);
 
-    int segments_needed = (curr_client->client->file_len / mem_info.seg_size) + 1;
+    int segments_needed = (curr_client->client->file_len / mem_info.seg_size);
+    if (curr_client->client->file_len % mem_info.seg_size != 0)
+      segments_needed++;
     // keep track of how many more segments we need to grab
     int segments_to_recv = segments_needed;
     for (int i = 0; i < segments_needed; i += available_segment_count) { // TODO: should cover everything?
@@ -202,7 +213,16 @@ void *check_clientq() {
 
         int segment_id = available_segments[j]->segment_id;
         char *sh_mem = (char *) shmat(segment_id, NULL, 0);
-        memcpy(file_buffer + ((j + i) * mem_info.seg_size), sh_mem, mem_info.seg_size);
+
+        int offset = (j + i) * mem_info.seg_size;
+        if (segments_to_recv == 0) {
+          int len = curr_client->client->file_len - offset;
+          memcpy(file_buffer + (offset), sh_mem, len);
+        } else {
+          memcpy(file_buffer + (offset), sh_mem, mem_info.seg_size);
+        }
+        // original:
+        /* memcpy(file_buffer + ((j + i) * mem_info.seg_size), sh_mem, mem_info.seg_size); */
 
         // TODO: i really hope this is right ^^
       }
@@ -261,8 +281,10 @@ static void *work_thread(void *arg) {
       seg_data_t **available_segments = calloc(mem_info.seg_count, sizeof(seg_data_t *));
 
       pthread_mutex_lock(&mem_info.lock);
-      int available_segment_count = grab_segments(&available_segments, task.file_len);
+      int available_segment_count = grab_segments(&available_segments, compressed_len);
       pthread_mutex_unlock(&mem_info.lock);
+
+
 
       // now need to tell client that data is compressed
       // might have to send back the data in multiple passes
@@ -275,9 +297,11 @@ static void *work_thread(void *arg) {
       mqd_t client_mq = mq_open(mqPath, O_RDWR);
 
       char *message_buffer = calloc(2048, sizeof(char));
-      prep_segment_availability_message(&message_buffer, available_segment_count, &available_segments);
+      prep_segment_avail_metadata_msg(&message_buffer, compressed_len, available_segment_count, &available_segments);
 
-      int segments_needed = (task.file_len / mem_info.seg_size) + 1;
+      int segments_needed = (task.file_len / mem_info.seg_size);
+      if (task.file_len % mem_info.seg_size != 0)
+          segments_needed++;
       int segments_to_recv = segments_needed;
       for (int i = 0; i < segments_needed; i += available_segment_count) { // TODO: does this work
 
@@ -290,7 +314,14 @@ static void *work_thread(void *arg) {
           int segment_id = available_segments[j]->segment_id;
           char *sh_mem = (char *) shmat(segment_id, NULL, 0);
 
-          memcpy(sh_mem, (*(task.file_buffer)) + ((j + i) * mem_info.seg_size), mem_info.seg_size);
+          int offset = (j + i) * mem_info.seg_size;
+          if (segments_to_recv == 0) {
+            int len = task.file_len - offset;
+            memcpy(sh_mem, (*(task.file_buffer)) + (offset), len);
+          } else {
+            memcpy(sh_mem, (*(task.file_buffer)) + (offset), mem_info.seg_size);
+          }
+
         }
 
 
@@ -394,7 +425,7 @@ static void *listen_thread(void *arg) {
     task_node *node = (task_node *) malloc(sizeof(task_node));
     cltask *task = (cltask *) malloc(sizeof(cltask));
     node->client = task;
-    //TODO: 
+    //TODO:
     //add stuff to task?
 
     pthread_mutex_lock(&client_q.lock);
