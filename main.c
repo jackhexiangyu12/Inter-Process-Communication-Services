@@ -612,7 +612,10 @@ int main() {
     return 1;
   }
 
-  snappy_init_env(wthread_arg->env);
+
+  struct snappy_env *env = (struct snappy_env *) malloc(sizeof(struct snappy_env));
+  snappy_init_env(env);
+  wthread_arg->env = env;
 
   lthread_arg->main_q = main_q;
 
