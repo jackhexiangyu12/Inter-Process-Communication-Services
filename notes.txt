@@ -1,0 +1,5 @@
+make sure to free task nodes after they are used
+
+to avoid deadlocks be sure to only hold 1 lock at a time
+dont lock multiple lists or objects
+dont hold mem_info while locking a list
