@@ -3,3 +3,9 @@ make sure to free task nodes after they are used
 to avoid deadlocks be sure to only hold 1 lock at a time
 dont lock multiple lists or objects
 dont hold mem_info while locking a list
+
+after compiling, look at all the warnings and address them. they probably point to bugs
+
+to implement the client, basically just need to parse the server messages and then keep pulling/pushing data from the segments that were given by the server
+do it in a loop until the full file is read, or the full compressed len is read
+can probably steal most of the server code for this
