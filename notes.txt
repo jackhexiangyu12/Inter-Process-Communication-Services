@@ -26,3 +26,5 @@ clientA -> request 1, request 2
 clientB -> request 1, request 2, request 3, request 4
 
 then keep track of the most recent client serial number that was hit (store the serial numbers in an arrayqueue or another easily modifieable circular loopable structure) and then round robin jump to the next client in the list and pop its task queue
+
+just hardcode the client serial numbers in the client, or generate them once in a client process, and pass the same value into sync_compress each time it is called
