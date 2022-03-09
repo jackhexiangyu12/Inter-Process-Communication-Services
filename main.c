@@ -252,9 +252,9 @@ static void *work_thread(void *arg) {
       // TODO:
       // do snappy compress or something
       // put the compressed data back on the shared memory
-      int *compressed_len;
+      unsigned long compressed_len = 0;
       char *compressed_data_buffer = (char *) malloc(sizeof(char) * task.file_len); // make it too big in case
-      int snappy_status = snappy_compress(thd_arg->env, *(task.file_buffer), task.file_len, compressed_data_buffer, compressed_len);
+      int snappy_status = snappy_compress(thd_arg->env, *(task.file_buffer), task.file_len, compressed_data_buffer, &compressed_len);
 
 
       // grab free segments for data transfer

@@ -39,7 +39,8 @@ int main(int argc, char *argv[]) {
   fclose(file);
 
 
-  char * compressed_file_buffer = sync_compress(buffer, file_len);
+  unsigned long compressed_len = 0;
+  char * compressed_file_buffer = sync_compress(buffer, file_len, &compressed_len);
   fprintf(file1, "The text: %s\n", compressed_file_buffer);
 
 

@@ -247,7 +247,7 @@ unsigned char *get_compressed_data(char *return_message_buffer) {
   return compressed_data_buffer;
 }
 
-unsigned char * sync_compress(unsigned char *data, unsigned long file_len) {
+unsigned char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len) {
   // qclient.c code here
   // but not the file reader part
 
@@ -305,7 +305,7 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len) {
 }
 
 
-unsigned char * async_compress(unsigned char *data, unsigned long file_len) {
+unsigned char * async_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len) {
   // TODO: right now this is the same as sync mode
 
 
