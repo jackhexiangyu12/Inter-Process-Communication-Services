@@ -155,10 +155,12 @@ void *check_clientq() {
 
     // send the preliminary data message to client, then send the availability message
 
+    printf("%s\n", message_buffer);
+    printf("client mq path: %s\n", messagePath);
     int ret_stat = mq_send(client_mq, message_buffer, strlen(message_buffer) + 1, 0);
 
     if (ret_stat == -1) {
-      printf(" messeage que is not working\n");
+      printf(" messeage que is not working 1\n");
 
     } else {
       printf("Message q is working\n");
@@ -181,7 +183,7 @@ void *check_clientq() {
       int ret_status = mq_send(client_mq, message_buffer, strlen(message_buffer) + 1, 0);
 
       if (ret_status == -1) {
-        printf(" messeage que is not working\n");
+        printf(" messeage que is not working 2\n");
 
       } else {
         printf("Message q is working\n");
@@ -195,7 +197,7 @@ void *check_clientq() {
       ret_status = mq_receive(client_mq, tmp, strlen(tmp) + 1, 0);
       // TODO: error handling? dont assume the message is "OK" ?
       if (ret_status == -1) {
-        printf(" messeage que is not working\n");
+        printf(" messeage que is not working 3\n");
 
       } else {
         printf("Message q is working\n");
@@ -237,6 +239,7 @@ void *check_clientq() {
     comp_task->file_buffer = &file_buffer;
 
     task_node *comp_node = (task_node *) malloc(sizeof(comp_node));
+    comp_node->task = comp_task;
 
     pthread_mutex_lock(&task_q.lock);
     add_to_list(&task_q, comp_node);
@@ -275,6 +278,8 @@ static void *work_thread(void *arg) {
       unsigned long compressed_len = 0;
       char *compressed_data_buffer = (char *) malloc(sizeof(char) * task.file_len); // make it too big in case
       int snappy_status = snappy_compress(thd_arg->env, *(task.file_buffer), task.file_len, compressed_data_buffer, &compressed_len);
+      /* memcpy(compressed_data_buffer, *(task.file_buffer), task.file_len); // incase snappy fails */
+      compressed_len = task.file_len;
 
 
       // grab free segments for data transfer
@@ -329,7 +334,7 @@ static void *work_thread(void *arg) {
         int ret_status = mq_send(client_mq, message_buffer, strlen(message_buffer) + 1, 0);
 
         if (ret_status == -1) {
-          printf(" messeage que is not working\n");
+          printf(" messeage que is not working 4\n");
 
         } else {
           printf("Message q is working\n");
@@ -341,7 +346,7 @@ static void *work_thread(void *arg) {
         ret_status = mq_receive(client_mq, tmp, strlen(tmp) + 1, 0);
         // TODO: error handling? dont assume the message is "OK" ?
         if (ret_status == -1) {
-          printf(" messeage que is not working\n");
+          printf(" messeage que is not working 5\n");
 
         } else {
           printf("Message q is working\n");
@@ -396,7 +401,7 @@ static void *listen_thread(void *arg) {
     int mq_ret = mq_receive(thread_arg->main_q, recieve_buffer, sizeof(recieve_buffer), NULL);
 
     if (mq_ret == -1) {
-      printf(" messeage que is not working\n");
+      printf(" messeage que is not working 6\n");
 
     } else {
       printf("Message q is working\n");
@@ -424,6 +429,12 @@ static void *listen_thread(void *arg) {
 
     task_node *node = (task_node *) malloc(sizeof(task_node));
     cltask *task = (cltask *) malloc(sizeof(cltask));
+
+    task->is_done = 0;
+    task->message_queue_id = atoi(mqId);
+    task->file_len = file_len;
+
+
     node->client = task;
     //TODO:
     //add stuff to task?

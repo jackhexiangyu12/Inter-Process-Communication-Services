@@ -38,14 +38,15 @@ int establish_communicator_channel(unsigned long file_len, mqd_t *return_q_ptr) 
   struct mq_attr attr;
   attr.mq_curmsgs = 0;
   attr.mq_flags = 0;
-  attr.mq_maxmsg = 10;
-  attr.mq_msgsize = 50;
+  attr.mq_maxmsg = 4096;
+  attr.mq_msgsize = 4096 * 64;
   char id[8]; // 7 long
 
   sprintf(id, "%d", randomId);
 
   char idPath[9];
   sprintf(idPath, "/%d", randomId);
+  printf("client mq path: %s\n", idPath);
 
   *return_q_ptr = mq_open(idPath, O_CREAT | O_RDWR, 0777, &attr);
 
@@ -59,7 +60,7 @@ int establish_communicator_channel(unsigned long file_len, mqd_t *return_q_ptr) 
 
   int mq_ret = mq_send(main_server_q, buf, len+1, 0);
   if (mq_ret == -1){
-    printf(" messeage que is not working\n");
+    printf(" messeage que is not working 7\n");
 
   }else{
     printf("Message q is working\n");
@@ -322,7 +323,7 @@ void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *retu
 
   int mq_ret = mq_send(mq_snd_open, buf, len+1, 0);
   if (mq_ret == -1){
-    printf(" messeage que is not working\n");
+    printf(" messeage que is not working 8\n");
 
   }else{
     printf("Message q is working\n");
@@ -412,6 +413,7 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len, unsig
   receive_compressed_data(&private_q, &compressed_data_buffer, compressed_len);
 
   // now destroy the message queue that was used to get the compressed file back
+  printf("about to close and destroy the client q\n");
   mq_close(private_q);
   char idPath[9];
   sprintf(idPath, "/%d", private_q_id);
