@@ -38,8 +38,8 @@ int establish_communicator_channel(unsigned long file_len, mqd_t *return_q_ptr) 
   struct mq_attr attr;
   attr.mq_curmsgs = 0;
   attr.mq_flags = 0;
-  attr.mq_maxmsg = 4096;
-  attr.mq_msgsize = 4096 * 64;
+  attr.mq_maxmsg = 10;
+  attr.mq_msgsize = 128;
   char id[8]; // 7 long
 
   sprintf(id, "%d", randomId);
@@ -74,8 +74,10 @@ int establish_communicator_channel(unsigned long file_len, mqd_t *return_q_ptr) 
 }
 
 
-int *parse_server_message(char *message_buffer, unsigned long *file_len, int *seg_count, int *seg_size) {
+void parse_server_message(int **seg_array, char *message_buffer, unsigned long *file_len, int *seg_count, int *seg_size) {
+  /* printf("inside parse server message --------------------------------\n"); */
 
+  /* printf("hi 1\n"); */
   int i = 0;
   char seg_size_str[64];
   while (message_buffer[i] != ',') {
@@ -85,6 +87,7 @@ int *parse_server_message(char *message_buffer, unsigned long *file_len, int *se
   seg_size_str[i] = '\0';
   *seg_size = atoi(seg_size_str);
 
+  /* printf("seg size: %d\n", *seg_size); */
   i++; // skip over comma
   char seg_count_str[64];
   int indx = 0;
@@ -98,6 +101,7 @@ int *parse_server_message(char *message_buffer, unsigned long *file_len, int *se
 
   *seg_count = atoi(seg_count_str);
 
+  /* printf("seg count: %d\n", *seg_count); */
 
   char file_len_str[64];
   int flInx = 0;
@@ -113,8 +117,11 @@ int *parse_server_message(char *message_buffer, unsigned long *file_len, int *se
   unsigned long f_len = strtoul(file_len_str, f, 10);
   *file_len = f_len;
 
-  int *seg_array = calloc(*seg_count, sizeof(int));
+  /* int *seg_array = (int *) malloc(sizeof(int) * *seg_count); */
+  /* int *seg_array = calloc(*seg_count, sizeof(int)); */
+  /* printf("hi 4\n"); */
 
+  int counter = 0;
   for (int index = 0; index < *seg_count; index++) {
 
     char seg_id_str[64];
@@ -126,10 +133,16 @@ int *parse_server_message(char *message_buffer, unsigned long *file_len, int *se
     }
     seg_id_str[ind] = '\0';
     i++;
-    seg_array[index] = atoi(seg_id_str);
+
+    /* printf("seg count: %d, counter: %d\n", *seg_count, counter); */
+    /* printf("seg id str: %s\n", seg_id_str); */
+
+    (*seg_array)[index] = atoi(seg_id_str);
+    /* printf("array value: %d\n", (*seg_array)[index]); */
+    counter++;
   }
 
-  return seg_array;
+  /* printf("about to return\n"); */
 }
 
 void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *private_q) {
@@ -161,8 +174,11 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *pri
   int seg_count = 0;
   int seg_size = 0;
   unsigned long f_len = 0;
-  int *seg_array = parse_server_message(recv_buff, &f_len, &seg_count, &seg_size);
-  free(seg_array);
+  printf("about to parse\n");
+  printf("recv buff message: %s. message len: %lu\n", recv_buff, strlen(recv_buff));
+  int *seg_array = calloc(MAX_SEGMENTS_IN_PASS, sizeof(int));
+  parse_server_message(&seg_array, recv_buff, &f_len, &seg_count, &seg_size);
+  printf("successful parse\n");
 
   // seg_size, seg_array, seg_count
 
@@ -180,8 +196,8 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *pri
     ///// reparse here
     seg_count = 0;
     seg_size = 0;
-    seg_array = parse_server_message(recv_buff, &f_len, &seg_count, &seg_size);
-
+    parse_server_message(&seg_array, recv_buff, &f_len, &seg_count, &seg_size);
+    printf("successful parse 2 ---------------------   ^^^^\n");
 
 
 
@@ -204,13 +220,28 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *pri
       }
 
     }
-    free(seg_array);
 
     // now send ACK to the server
+    struct mq_attr attr;
+    mq_getattr(*private_q, &attr);
+    /* attr.mq_curmsgs */
+    printf("length of q: %d\n", attr.mq_curmsgs);
+    printf("about to ack server\n");
+    // is queue full???
     stat = mq_send(*private_q, "OK", 3, 0);
+    printf("acked --------------------------------------*************\n");
+
+    if (stat == -1) {
+        printf(" messeage que is not working idk what num\n");
+
+      } else {
+        printf("Message q is working -- send OK\n");
+      }
 
     ii += seg_count;
+    printf("end of while loop client send\n");
   }
+  free(seg_array);
 
   // TODO: anything else?
 }
@@ -226,9 +257,9 @@ void receive_compressed_data(mqd_t *private_q, char **comp_data_buffer, unsigned
   // TODO: correct????
   int seg_count = 0;
   int seg_size = 0;
-  int *seg_array = parse_server_message(recv_buff, compressed_len, &seg_count, &seg_size);
-  free(seg_array);
-
+  int *seg_array = calloc(MAX_SEGMENTS_IN_PASS, sizeof(int));
+  parse_server_message(&seg_array, recv_buff, compressed_len, &seg_count, &seg_size);
+  printf("successful parse 3\n");
   // seg_size, seg_array, seg_count
 
   int segments_needed = (*compressed_len / seg_size);
@@ -245,8 +276,8 @@ void receive_compressed_data(mqd_t *private_q, char **comp_data_buffer, unsigned
     ///// reparse here
     seg_count = 0;
     seg_size = 0;
-    seg_array = parse_server_message(recv_buff, compressed_len, &seg_count, &seg_size);
-
+    parse_server_message(&seg_array, recv_buff, compressed_len, &seg_count, &seg_size);
+    printf("successful parse 4\n");
 
 
 
@@ -269,13 +300,14 @@ void receive_compressed_data(mqd_t *private_q, char **comp_data_buffer, unsigned
       }
 
     }
-    free(seg_array);
 
     // now send ACK to the server
     stat = mq_send(*private_q, "OK", 3, 0);
 
     ii += seg_count;
   }
+
+  free(seg_array);
 }
 
 
@@ -393,8 +425,16 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len, unsig
    */
 
 
-  mqd_t private_q;
-  int  private_q_id = establish_communicator_channel(file_len, &private_q);
+  mqd_t *private_q = malloc(sizeof(mqd_t));
+  // TODO: check for null
+  int  private_q_id = establish_communicator_channel(file_len, private_q);
+  /* int mq_ret = mq_send(*private_q, "hello", 6, 0); */
+  /* if (mq_ret == -1){ */
+  /*   printf(" messeage que is not working tmp\n"); */
+
+  /* }else{ */
+  /*   printf("Message q is working\n"); */
+  /* } */
 
   // now wait for the segment id(s) to come back from the server
   //  then put the data on the segment id
@@ -404,7 +444,7 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len, unsig
   // this makes it way easier to implement and is allowed
 
 
-  send_data_to_server(file_len, data, &private_q);
+  send_data_to_server(file_len, data, private_q);
 
   // allocate a buffer for the compressed data -- its ok to allocate too much memory
   char *compressed_data_buffer = (char *) malloc(file_len);
@@ -414,7 +454,7 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len, unsig
 
   // now destroy the message queue that was used to get the compressed file back
   printf("about to close and destroy the client q\n");
-  mq_close(private_q);
+  mq_close(*private_q);
   char idPath[9];
   sprintf(idPath, "/%d", private_q_id);
   mq_unlink(idPath);

@@ -5,6 +5,8 @@
 #define SHARED_MEM_LEN (32)
 #define MAIN_QUEUE_PATH ("/procq1")
 
+#define MAX_SEGMENTS_IN_PASS (100)
+
 #define QUEUE_ID_LEN (7)
 
 typedef struct segment_metadata_block {

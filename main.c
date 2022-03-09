@@ -104,7 +104,7 @@ int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
 }
 
 void prep_segment_avail_metadata_msg(char **message_buffer, unsigned long file_len, int segments_available_count, seg_data_t ***available_segments) {
-  sprintf(*message_buffer, "%d,%d,%lu", mem_info.seg_size, segments_available_count, file_len);
+  sprintf(*message_buffer, "%d,%d,%lu,", mem_info.seg_size, segments_available_count, file_len);
 
     // now put the segment ids into the buffer, horribly (im sorry)
 
@@ -127,6 +127,7 @@ void *check_clientq() {
     if (curr_client == NULL)
       /* sched_yield(); // helpful?  */
       continue;
+    printf("got a client task\n");
 
     // then need to grab the max amount of segments that we are allotted, but only enough for the file
 
@@ -163,7 +164,7 @@ void *check_clientq() {
       printf(" messeage que is not working 1\n");
 
     } else {
-      printf("Message q is working\n");
+      printf("sent a preliminary client q message\n");
     }
 
 
@@ -186,15 +187,16 @@ void *check_clientq() {
         printf(" messeage que is not working 2\n");
 
       } else {
-        printf("Message q is working\n");
+        printf("sent a normal client q message\n");
       }
 
       // NOTE: this server thread works with the client library func send_data_to_server
 
       // after sending data to the client, wait for client to say its done packing the data
       // basically we are listening for an ACK -- dont verify the content bc i dont care about error checking
-      char tmp[2048];
-      ret_status = mq_receive(client_mq, tmp, strlen(tmp) + 1, 0);
+      char tmp[256];
+      ret_status = mq_receive(client_mq, tmp, 11, NULL);
+      printf("variable?: %s\n", tmp);
       // TODO: error handling? dont assume the message is "OK" ?
       if (ret_status == -1) {
         printf(" messeage que is not working 3\n");
@@ -255,8 +257,8 @@ static void *work_thread(void *arg) {
   while (1) {
     pthread_mutex_lock(&task_q.lock);
     if (queue_size(&task_q) > 0) {
+      printf("got a compression task\n");
       // then do stuff
-
       task_node *current_task = remove_head(&task_q);
       pthread_mutex_unlock(&task_q.lock);
 
@@ -349,7 +351,7 @@ static void *work_thread(void *arg) {
           printf(" messeage que is not working 5\n");
 
         } else {
-          printf("Message q is working\n");
+          printf("Message q is working - recv 5\n");
         }
       }
       free(message_buffer);
@@ -404,7 +406,7 @@ static void *listen_thread(void *arg) {
       printf(" messeage que is not working 6\n");
 
     } else {
-      printf("Message q is working\n");
+      printf("Message q is working - recv 6\n");
     }
 
     // add to the client queue
@@ -539,8 +541,8 @@ int main() {
   pthread_t listen_thread_id;
   pthread_create(&listen_thread_id, NULL, listen_thread, (void *)lthread_arg);
 
-  pthread_t work_thread_id;
-  pthread_create(&work_thread_id, NULL, work_thread, (void *)wthread_arg);
+  /* pthread_t work_thread_id; */
+  /* pthread_create(&work_thread_id, NULL, work_thread, (void *)wthread_arg); */
 
 
   pthread_t check_client_thread_id;
