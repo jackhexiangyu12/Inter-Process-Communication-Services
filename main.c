@@ -47,62 +47,6 @@ mqd_t setup_main_q() {
 }
 
 // need function where you give it a byte array, and it puts a proper shared memory message on q
-void return_compressed_data(char *compressed_data, unsigned long compressed_len, char *mqId) {
-  char mqPath[100];
-  sprintf(mqPath, "/%s", mqId);
-
-
-  // make new shared memory for sending back the compressed file
-  int segment_id = shmget(IPC_PRIVATE, compressed_len, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
-
-  char *sh_mem = (char *) shmat(segment_id, NULL, 0);
-
-
-  memmove(sh_mem, compressed_data, compressed_len);
-  char return_message_buf[218];
-  sprintf(return_message_buf, "%d:%lu",segment_id , compressed_len);
-  // compressed_len:segment_id
-
-
-
-  mqd_t return_q = mq_open(mqPath, O_WRONLY);
-  int return_status = mq_send(return_q, return_message_buf, strlen(return_message_buf) + 1, 0);
-
-  if (return_status == -1) {
-    printf(" messeage que is not working\n");
-
-  } else {
-    printf("Message q is working\n");
-  }
-
-
-  // dont need anything else?
-}
-
-int extract_segment_id(char *mqMessage, int colon_index) {
-  // extract the segment id from the message
-
-  char segIdCharBuf[200];
-
-  int i = colon_index + 1;
-  int j = 0;
-  while (mqMessage[i] != '\0') {
-    segIdCharBuf[j] = mqMessage[i];
-    i++;
-    j++;
-  }
-
-  segIdCharBuf[j] = '\0';
-  printf("buffer pre conversion: %s\n", segIdCharBuf);
-  printf("colon index: %d\n", colon_index);
-
-  int segment_id = atoi(segIdCharBuf);
-  return segment_id;
-}
-
-void extract_mqID(char *mqMessage, char **mq_id) {
-  // cant figure this pointer stuff out
-}
 
 
 int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
@@ -279,77 +223,6 @@ void *check_clientq() {
     pthread_mutex_unlock(&task_q.lock);
   }
 }
-void *handle_request(void *buffer) {
-  char *mqMessage = buffer;
-  printf("message received: %s\n", mqMessage);
-  // buf now holds the string of: <7 char id for the mq><file_len as unsigned long>:<segment id number>
-
-  // extract mq_id from the message
-  char mq_id[8];
-  memcpy(mq_id, mqMessage, QUEUE_ID_LEN);
-  mq_id[QUEUE_ID_LEN] = '\0';
-
-  printf("return q id: %s\n", mq_id);
-
-  int i = QUEUE_ID_LEN;
-  int j = 0;
-  char dataLenBuffer[64];
-  while (mqMessage[i] != ':') {
-    dataLenBuffer[j] = mqMessage[i];
-    i++;
-    j++;
-  }
-  dataLenBuffer[j] = '\0';
-
-  char **f;
-  unsigned long data_len = strtoul(dataLenBuffer, f, 10);
-  printf("data length: %lu\n", data_len);
-
-
-  int segment_id = extract_segment_id(mqMessage, i);
-
-  printf("segment id: %d\n", segment_id);
-
-  char *sh_mem = (char *) shmat(segment_id, NULL, 0);
-
-  /* printf("virtual address: %d\n", (int) sh_mem); */
-
-
-  /* printf("message: %s\n", sh_mem); */
-
-  /* sprintf(messageBuff, "modified message string : %s", "fake message"); */
-
-
-  char compressed_file[data_len];
-
-  // now need to do the actual compression, and get a length of the compressed file
-  unsigned long compressed_file_length = data_len;
-  // TODO:
-  struct snappy_env env;
-  snappy_init_env(&env);
-
-  //snappy_compress(&env, sh_mem, data_len, compressed_file, &compressed_file_length);
-  memmove(compressed_file, sh_mem, data_len);
-
-
-
-  // kill the shared memory that was used to grab the original file
-  shmdt(sh_mem);
-  shmctl(segment_id, IPC_RMID, 0);
-
-
-
-
-  // now open the return message q, and put a message on it
-
-  /* printf("%s\n", mqPath); */
-  return_compressed_data(compressed_file, compressed_file_length, mq_id);
-
-  pthread_exit(0);
-  return NULL;
-}
-
-
 
 
 static void *work_thread(void *arg) {
@@ -521,6 +394,8 @@ static void *listen_thread(void *arg) {
     task_node *node = (task_node *) malloc(sizeof(task_node));
     cltask *task = (cltask *) malloc(sizeof(cltask));
     node->client = task;
+    //TODO: 
+    //add stuff to task?
 
     pthread_mutex_lock(&client_q.lock);
     add_to_list(&client_q, node);
