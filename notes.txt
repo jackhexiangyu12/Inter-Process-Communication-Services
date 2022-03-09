@@ -9,3 +9,11 @@ after compiling, look at all the warnings and address them. they probably point 
 to implement the client, basically just need to parse the server messages and then keep pulling/pushing data from the segments that were given by the server
 do it in a loop until the full file is read, or the full compressed len is read
 can probably steal most of the server code for this
+
+
+-------
+how to implement QoS:
+
+assume use some sort of random serial number maker to give each client an id
+
+then change the check client q thread to do a QoS search on the client q rather than just popping the head
