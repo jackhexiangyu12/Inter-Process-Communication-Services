@@ -17,7 +17,7 @@ int main(int argc, char *argv[]) {
   FILE *file, *file1;
 
   //open the file
-  file = fopen("inputs/Tiny.txt", "r+");
+  file = fopen("inputs/Large.txt", "r+");
   file1 = fopen("compressed", "rw");
   if (file == NULL) {
     fprintf(stderr, "Unable to open file %s\n", argv[1]);

@@ -7,9 +7,15 @@ typedef struct compression_task {
   int put_queue_id;
   int segment_id; // dont need anymore
   int data_len; // wot
-  int segment_index; // not sure if this is needed anymore
   unsigned long file_len;
   char *file_buffer; // points to a buffer for the file, in heap space
+
+  int segment_index; // acts as the 'i' index from the main loop
+  int total_segments_needed;
+  int segments_remaining;
+
+  unsigned long compressed_len;
+  short fresh;
 } ctask;
 
 typedef struct client_task {

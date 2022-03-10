@@ -493,6 +493,12 @@ void *improved_check_clientq() {
       comp_task->put_queue_id = curr_client->client->put_queue_id;
       /* comp_task->message_queue_id = curr_client->client->message_queue_id; */
       comp_task->file_buffer = curr_client->client->file_buffer;
+      comp_task->compressed_len = 0;
+      comp_task->fresh = 1; // very important
+      comp_task->segment_index = 0;
+
+
+
 
       task_node *comp_node = (task_node *) malloc(sizeof(comp_node));
       comp_node->task = comp_task;
@@ -504,7 +510,7 @@ void *improved_check_clientq() {
       add_to_list(&task_q, comp_node);
       pthread_mutex_unlock(&task_q.lock);
 
-      free(curr_client);
+      /* free(curr_client); */
       /* free(curr_client->client); // idk if this is safe*/
     } else {
 
@@ -512,7 +518,7 @@ void *improved_check_clientq() {
 
       // put back on the client queue
       pthread_mutex_lock(&client_q.lock);
-      add_to_list(&task_q, curr_client);
+      add_to_list(&client_q, curr_client);
       pthread_mutex_unlock(&client_q.lock);
 
     }
@@ -531,6 +537,155 @@ void *improved_check_clientq() {
 
 
 static void *work_thread(void *arg) {
+  // idk what args to use
+
+  workthread_arg_t *thd_arg = (workthread_arg_t *) arg;
+  while (1) {
+    pthread_mutex_lock(&task_q.lock);
+    if (queue_size(&task_q) > 0) {
+      printf("got a compression task -----------------------------------------------------------------------------------------------------------------------\n");
+      // then do stuff
+      task_node *current_task = remove_head(&task_q);
+      pthread_mutex_unlock(&task_q.lock);
+
+      ctask task = *current_task->task; // seg fault here??
+
+      /* // read the data from the segment */
+      /* int segment_id = task.segment_id; */
+
+
+      /* char *sh_mem = (char *) shmat(segment_id, NULL, 0); */
+
+      // use:
+      // task.file_buffer;
+      // as the data for compression
+
+      // TODO:
+      // do snappy compress or something
+      // put the compressed data back on the shared memory
+      unsigned long compressed_len = 0;
+      char *compressed_data_buffer = (char *) malloc(sizeof(char) * task.file_len); // make it too big in case
+      int snappy_status = snappy_compress(thd_arg->env, (task.file_buffer), task.file_len, compressed_data_buffer, &compressed_len);
+      /* memcpy(compressed_data_buffer, *(task.file_buffer), task.file_len); // incase snappy fails */
+      /* compressed_len = task.file_len; // dont do this*/
+
+
+      // grab free segments for data transfer
+      seg_data_t **available_segments = calloc(mem_info.seg_count, sizeof(seg_data_t *));
+
+      pthread_mutex_lock(&mem_info.lock);
+      int available_segment_count = grab_segments(&available_segments, compressed_len);
+      pthread_mutex_unlock(&mem_info.lock);
+
+
+
+      // now need to tell client that data is compressed
+      // might have to send back the data in multiple passes
+      // ugh
+
+      // TODO: check for deadlocks
+
+      char getQPath[128];
+      sprintf(getQPath, "/%d", task.get_queue_id);
+      mqd_t client_mq_get = mq_open(getQPath, O_RDWR);
+
+      char putQPath[128];
+      sprintf(putQPath, "/%d", task.put_queue_id);
+      mqd_t client_mq_put = mq_open(putQPath, O_RDWR);
+
+      char *message_buffer = calloc(MAX_MESSAGE_LEN, sizeof(char));
+      prep_segment_avail_metadata_msg(&message_buffer, compressed_len, available_segment_count, &available_segments);
+
+
+      // need to send preliminary message
+      printf("about to send this message in work thread: %s\n", message_buffer);
+      int ret_status = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
+
+        if (ret_status == -1) {
+          printf(" messeage que is not working 4.1?\n");
+
+        } else {
+          printf("Message q is working -- sent work thread prelim\n");
+        }
+
+      int segments_needed = (compressed_len / mem_info.seg_size);
+      if (compressed_len % mem_info.seg_size != 0)
+          segments_needed++;
+      int segments_to_recv = segments_needed;
+      for (int i = 0; i < segments_needed; i += available_segment_count) { // TODO: does this work
+
+        // need to put the data onto the segments before signaling a transfer
+        // basically the inverse of the check client q thread
+        for (int j = 0; j < available_segment_count; j++) {
+          if (segments_to_recv == 0)
+            break; // yeet
+          segments_to_recv--;
+          int segment_id = available_segments[j]->segment_id;
+          char *sh_mem = (char *) shmat(segment_id, NULL, 0);
+
+          int offset = (j + i) * mem_info.seg_size;
+          if (segments_to_recv == 0) {
+            int len = compressed_len - offset;
+            memcpy(sh_mem, (compressed_data_buffer) + (offset), len);
+          } else {
+            memcpy(sh_mem, (compressed_data_buffer) + (offset), mem_info.seg_size);
+          }
+
+        }
+
+
+
+        ret_status = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
+
+        if (ret_status == -1) {
+          printf(" messeage que is not working 4\n");
+
+        } else {
+          printf("Message q is working -- sent work thread main msg\n");
+        }
+
+        // now wait for an ACK from the client -- no error handling implemented
+
+        char tmp[MAX_MESSAGE_LEN];
+        ret_status = mq_receive(client_mq_put, tmp, MAX_MESSAGE_LEN, 0);
+        // TODO: error handling? dont assume the message is "OK" ?
+        if (ret_status == -1) {
+          printf(" messeage que is not working 5\n");
+          int err = errno;
+          printf("error code: %d\n", err);
+        } else {
+          printf("Message q is working - recv 5\n");
+        }
+      }
+      free(message_buffer);
+      mq_close(client_mq_put);
+      mq_close(client_mq_get);
+
+
+      // then free the segments
+
+      release_segments(available_segment_count, &available_segments);
+      free(available_segments);
+
+    } else {
+      pthread_mutex_unlock(&task_q.lock);
+    }
+  }
+
+  // pop the work q
+  // if nothing, keep looping
+  // if something, do work until done
+  // put compressed data on the segment -- overwrite uncompressed data
+  // once done, tell the client that the segment is compressed
+  // the client then puts that segment into a buffer
+  // the client then tells us that it read the segment
+  // we then free the segment to be used by other clients
+
+
+  return NULL;
+}
+
+static void *improved_work_thread(void *arg) {
   // idk what args to use
 
   workthread_arg_t *thd_arg = (workthread_arg_t *) arg;
@@ -851,6 +1006,7 @@ int main() {
 
   pthread_t work_thread_id;
   pthread_create(&work_thread_id, NULL, work_thread, (void *)wthread_arg);
+
 
   int dont_halt = 1;
   char command_buffer[128];
