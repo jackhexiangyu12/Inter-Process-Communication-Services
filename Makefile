@@ -8,17 +8,24 @@ LDFLAGS = -lrt -lpthread
 #LDFLAGS += -m32
 
 
-all: scmd verify sgverify libsnappyc.so.1 client main
+all: scmd verify sgverify libsnappyc.so.1 client stress_client main
 
 task_queue.o: task_queue.c task_queue.h
 
 client_library.o: client_library.c client_library.h include.h
+
+stress_client.o: stress_client.c snappy.h client_library.h
+
+STRESS_CLIENT_OBJECTS = stress_client.o client_library.o snappy.o
+stress_client: $(STRESS_CLIENT_OBJECTS)
+	$(CC) $(CFLAGS) $(STRESS_CLIENT_OBJECTS) -o stress_client $(LDFLAGS)
 
 client.o: client.c snappy.h client_library.h
 
 CLIENT_OBJECTS = client.o client_library.o snappy.o
 client: $(CLIENT_OBJECTS)
 	$(CC) $(CFLAGS) $(CLIENT_OBJECTS) -o client $(LDFLAGS)
+
 
 main.o: main.c include.h snappy.h client_library.h
 

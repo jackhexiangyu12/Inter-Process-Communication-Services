@@ -9,5 +9,6 @@ ftracer
 main
 libsnappyc.so.1
 client
+stress_client
 my_process
 recv
