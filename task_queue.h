@@ -15,6 +15,7 @@ typedef struct compression_task {
   int segments_remaining;
 
   unsigned long compressed_len;
+  char *compressed_buffer;
   short fresh;
 } ctask;
 
