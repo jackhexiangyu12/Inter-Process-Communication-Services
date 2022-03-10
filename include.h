@@ -7,6 +7,10 @@
 
 #define MAX_SEGMENTS_IN_PASS (100)
 
+#define MAX_MESSAGE_LEN_ATTR (1024)
+
+#define MAX_MESSAGE_LEN (MAX_MESSAGE_LEN_ATTR + 1)
+
 #define QUEUE_ID_LEN (7)
 
 #define SLEEP_TIME (0)

@@ -41,7 +41,7 @@ void create_private_q(int q_id) {
   attr.mq_curmsgs = 0;
   attr.mq_flags = 0;
   attr.mq_maxmsg = 10;
-  attr.mq_msgsize = 128;
+  attr.mq_msgsize = MAX_MESSAGE_LEN_ATTR; // TODO: extremely finiky, dont make it too big, but really need to find the minimum it needs to be
 
   char idPath[9];
   sprintf(idPath, "/%d", q_id);
@@ -193,8 +193,8 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
   printf("sleeping, then grabbing the prelim message\n");
   sleep(SLEEP_TIME);
 
-  char recv_buff[2048 * 4];
-  int status = mq_receive(get_q, recv_buff, sizeof(recv_buff), NULL);
+  char recv_buff[MAX_MESSAGE_LEN];
+  int status = mq_receive(get_q, recv_buff, MAX_MESSAGE_LEN, NULL);
 
   // get segment size from preliminary message
 
@@ -221,7 +221,7 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
     printf("in main sender loop, sleeping then waiting for message\n");
     sleep(SLEEP_TIME);
     // blocking call - the server sends one each time data is ready to be accepted
-    int stat = mq_receive(get_q, recv_buff, sizeof(recv_buff), NULL);
+    int stat = mq_receive(get_q, recv_buff, MAX_MESSAGE_LEN, NULL);
 
     ///// reparse here
     seg_count = 0;
@@ -297,10 +297,10 @@ void receive_compressed_data(unsigned long *compressed_len, char **comp_data_buf
 
   // server sends preliminary message for this transaction too -- just makes things easier
   // preliminary message has the segment size and the compressed len size
-  char recv_buff[130];
+  char recv_buff[MAX_MESSAGE_LEN];
   /* char *recv_buff = calloc(2048, sizeof(char)); // stack smashing detected... */
   printf("sizeof(recv_buff): %ld\n", sizeof(recv_buff));
-  int status = mq_receive(get_q, recv_buff, 130, NULL);
+  int status = mq_receive(get_q, recv_buff, MAX_MESSAGE_LEN, NULL);
   printf("entire server msg before parsing: >>%s<<\n", recv_buff); // the msg is "OKs" -- wot
   // sometimes we get lucky and get the actual server message, sometimes we "OKs"
   // I have no idea how or why this happens
@@ -329,7 +329,7 @@ void receive_compressed_data(unsigned long *compressed_len, char **comp_data_buf
   while (ii < segments_needed) {
     // blocking call - the server sends one each time data is ready to be accepted
     printf("about to main recieve in the recv compressed data part\n");
-    int stat = mq_receive(get_q, recv_buff, sizeof(recv_buff), NULL);
+    int stat = mq_receive(get_q, recv_buff, MAX_MESSAGE_LEN, NULL);
 
     ///// reparse here
     seg_count = 0;

@@ -47,6 +47,22 @@ mqd_t setup_main_q() {
   return mq_create;
 }
 
+void print_error(int err) {
+  if (err == EAGAIN)
+    printf("eagain\n");
+  if (err == EBADF)
+    printf("ebadf\n");
+  if (err == EINTR)
+    printf("eintr\n");
+  if (err == EINVAL)
+    printf("einval\n");
+  if (err == EMSGSIZE)
+    printf("emsgsize\n");
+  if (err == ETIMEDOUT)
+    printf("etimedout\n");
+
+}
+
 void release_segments(int available_segment_count, seg_data_t ***available_segments) {
   // should abstract this
   pthread_mutex_lock(&mem_info.lock);
@@ -62,6 +78,8 @@ void release_segments(int available_segment_count, seg_data_t ***available_segme
 
 
 int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
+  // should be holding lock on mem_info
+
   // for starters, give half the free segments + 1
 
 
@@ -110,22 +128,26 @@ int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
   }
 
 
-
+  mem_info.used_seg_count += amount_to_grab;
 
 
   return amount_to_grab;
 }
 
 void prep_segment_avail_metadata_msg(char **message_buffer, unsigned long file_len, int segments_available_count, seg_data_t ***available_segments) {
+  printf("pre prep message:: file_len: %lu, segs available (arr len): %d\n", file_len, segments_available_count);
+
+
   sprintf(*message_buffer, "%d,%d,%lu,", mem_info.seg_size, segments_available_count, file_len);
 
     // now put the segment ids into the buffer, horribly (im sorry)
 
-    for (int i = 0; i < segments_available_count; i++) {
-      char tmp[2048];
-      memcpy(tmp, *message_buffer, strlen(*message_buffer)); // bc idk if this would work without copying
-      sprintf(*message_buffer, "%s%d,", tmp, (*available_segments)[i]->segment_id);
-    }
+  // TODO: this gets buggy -- adds duplicate copies of itself on the end or something
+  for (int i = 0; i < segments_available_count; i++) {
+    char tmp[2048];
+    memcpy(tmp, *message_buffer, strlen(*message_buffer)); // bc idk if this would work without copying
+    sprintf(*message_buffer, "%s%d,", tmp, (*available_segments)[i]->segment_id); // segfaulting on second client
+  }
 }
 
 // this thread is the client q handler
@@ -156,7 +178,7 @@ void *check_clientq() {
 
     // time for some unholy hacks bc im too lazy to code it correctly bc imagine having String.join() in a programming language standard library
 
-    char *message_buffer = calloc(129, sizeof(char));
+    char *message_buffer = calloc(MAX_MESSAGE_LEN, sizeof(char));
     // TODO: ok to send zero as file len?
     prep_segment_avail_metadata_msg(&message_buffer, curr_client->client->file_len, available_segment_count, &available_segments);
 
@@ -184,7 +206,11 @@ void *check_clientq() {
     int ret_stat = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
 
     if (ret_stat == -1) {
-      printf(" messeage que is not working 1\n");
+      printf(" messeage que is not working 1\n"); // emsgsize error
+      // msg_len was greater than the mq_msgsize attribute of the message queue
+      int err = errno;
+      printf("error code: %d\n", err); // got 90
+      print_error(err);
 
     } else {
       printf("successfully sent a preliminary client q message\n");
@@ -220,9 +246,9 @@ void *check_clientq() {
       // after sending data to the client, wait for client to say its done packing the data
       // basically we are listening for an ACK -- dont verify the content bc i dont care about error checking
       printf("about to listen for client ACK\n");
-      char tmp[256];
+      char tmp[MAX_MESSAGE_LEN];
 
-      ret_status = mq_receive(client_mq_put, tmp, 256, 0);
+      ret_status = mq_receive(client_mq_put, tmp, MAX_MESSAGE_LEN, 0);
       printf("ACK?: %s\n", tmp); // the ack is being read incorrectly
       // TODO: error handling? dont assume the message is "OK" ?
       if (ret_status == -1) {
@@ -345,7 +371,7 @@ static void *work_thread(void *arg) {
       sprintf(putQPath, "/%d", task.put_queue_id);
       mqd_t client_mq_put = mq_open(putQPath, O_RDWR);
 
-      char *message_buffer = calloc(2048, sizeof(char));
+      char *message_buffer = calloc(MAX_MESSAGE_LEN, sizeof(char));
       prep_segment_avail_metadata_msg(&message_buffer, compressed_len, available_segment_count, &available_segments);
 
 
@@ -398,8 +424,8 @@ static void *work_thread(void *arg) {
 
         // now wait for an ACK from the client -- no error handling implemented
 
-        char tmp[256];
-        ret_status = mq_receive(client_mq_put, tmp, 256, 0);
+        char tmp[MAX_MESSAGE_LEN];
+        ret_status = mq_receive(client_mq_put, tmp, MAX_MESSAGE_LEN, 0);
         // TODO: error handling? dont assume the message is "OK" ?
         if (ret_status == -1) {
           printf(" messeage que is not working 5\n");
@@ -449,7 +475,7 @@ static void *listen_thread(void *arg) {
     // check message queue for task
     // if no task, check active queue and switch to it
     // if message queue has a task, need to make new uthread for that task
-    char recieve_buffer[8192];
+    char recieve_buffer[8192]; // TODO: no hardcoding
 
     // blocking call
     int mq_ret = mq_receive(thread_arg->main_q, recieve_buffer, sizeof(recieve_buffer), NULL);
@@ -458,7 +484,7 @@ static void *listen_thread(void *arg) {
       printf(" messeage que is not working 6\n");
 
     } else {
-      printf("Message q is working - recv 6\n");
+      printf("Message q is working - got message in the listen thread\n");
     }
 
     // add to the client queue
