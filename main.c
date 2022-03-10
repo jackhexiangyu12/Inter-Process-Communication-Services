@@ -345,7 +345,7 @@ static void *work_thread(void *arg) {
       char *compressed_data_buffer = (char *) malloc(sizeof(char) * task.file_len); // make it too big in case
       int snappy_status = snappy_compress(thd_arg->env, *(task.file_buffer), task.file_len, compressed_data_buffer, &compressed_len);
       /* memcpy(compressed_data_buffer, *(task.file_buffer), task.file_len); // incase snappy fails */
-      compressed_len = task.file_len;
+      /* compressed_len = task.file_len; // dont do this*/
 
 
       // grab free segments for data transfer
@@ -403,10 +403,10 @@ static void *work_thread(void *arg) {
 
           int offset = (j + i) * mem_info.seg_size;
           if (segments_to_recv == 0) {
-            int len = task.file_len - offset;
-            memcpy(sh_mem, (*(task.file_buffer)) + (offset), len);
+            int len = compressed_len - offset;
+            memcpy(sh_mem, (compressed_data_buffer) + (offset), len);
           } else {
-            memcpy(sh_mem, (*(task.file_buffer)) + (offset), mem_info.seg_size);
+            memcpy(sh_mem, (compressed_data_buffer) + (offset), mem_info.seg_size);
           }
 
         }

@@ -492,6 +492,9 @@ char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long 
   sprintf(idPath, "/%d", put_q_id);
   mq_unlink(idPath);
 
+  // print the compressed data
+  printf("%s\n", compressed_data_buffer);
+
 
   return compressed_data_buffer;
 }
