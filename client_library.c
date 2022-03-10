@@ -21,41 +21,56 @@
 
 #include "include.h"
 
+
 // need procedure that takes in byte array and sync calls the server
 // and then gets stuff in return
 // returns pointer to compressed buffer
 
-int establish_communicator_channel(unsigned long file_len, mqd_t *return_q_ptr) {
-  // make initial request to server that contains file len and special msgQ id
-  srand(time(0));
+int generate_random_id(int seed_thingy) {
+  srand(time(0) + seed_thingy);
 
   int upper = 9999999;
   int lower = 1000000;
   int randomId = (rand() % (upper - lower + 1)) + lower;
+  return randomId;
+}
 
-
+void create_private_q(int q_id) {
   // create a new message queue for recieving a return message
   struct mq_attr attr;
   attr.mq_curmsgs = 0;
   attr.mq_flags = 0;
   attr.mq_maxmsg = 10;
   attr.mq_msgsize = 128;
-  char id[8]; // 7 long
-
-  sprintf(id, "%d", randomId);
 
   char idPath[9];
-  sprintf(idPath, "/%d", randomId);
+  sprintf(idPath, "/%d", q_id);
   printf("client mq path: %s\n", idPath);
 
-  *return_q_ptr = mq_open(idPath, O_CREAT | O_RDWR, 0777, &attr);
+  mqd_t return_q = mq_open(idPath, O_CREAT | O_RDWR, 0777, &attr);
+  close(return_q);
+}
+
+void establish_communicator_channel(unsigned long file_len, int *get_q_id, int *put_q_id) {
+  // need 2 communicator channels for this to be fully duplex
+
+
+
+
+  // make initial request to server that contains file len and special msgQ id
+  *get_q_id = generate_random_id(0);
+  *put_q_id = generate_random_id(5); // bc i dont want to write code that ensures they are different
+
+  create_private_q(*get_q_id);
+  create_private_q(*put_q_id);
+
 
 
   // open the shared queue for the server
   mqd_t main_server_q = mq_open(MAIN_QUEUE_PATH, O_WRONLY);
 
   char buf[2048];
-  sprintf(buf, "%d%lu:", randomId, file_len); // trailing colon bc look at the parser in the server
+  sprintf(buf, "%d%d%lu:", *get_q_id, *put_q_id, file_len); // trailing colon bc look at the parser in the server
   int len = strlen(buf);
 
   int mq_ret = mq_send(main_server_q, buf, len+1, 0);
@@ -66,11 +81,9 @@ int establish_communicator_channel(unsigned long file_len, mqd_t *return_q_ptr) 
     printf("Message q is working\n");
   }
 
-  mq_close(main_server_q);
+  mq_close(main_server_q); // dont need this anymore
 
-
-  // return the randomId just in case, also return value of the special queue that was created
-  return randomId;
+  return;
 }
 
 
@@ -145,7 +158,7 @@ void parse_server_message(int **seg_array, char *message_buffer, unsigned long *
   /* printf("about to return\n"); */
 }
 
-void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *private_q) {
+void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_id, int put_q_id) {
 
   // wait for segment id
 
@@ -164,9 +177,24 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *pri
   // client will have to look at the total file len, figure out the indexes for each chunk that it is
   //  sending, and then put all the compressed pieces back together
 
+  // first open the queue
+
+  // TODO: fix this copy paste garbage
+
+  char getQPath[128];
+  sprintf(getQPath, "/%d", get_q_id);
+  mqd_t get_q = mq_open(getQPath, O_RDWR);
+
+  char putQPath[128];
+  sprintf(putQPath, "/%d", put_q_id);
+  mqd_t put_q = mq_open(putQPath, O_RDWR);
+
+
+  printf("sleeping, then grabbing the prelim message\n");
+  sleep(SLEEP_TIME);
 
   char recv_buff[2048 * 4];
-  int status = mq_receive(*private_q, recv_buff, sizeof(recv_buff), NULL);
+  int status = mq_receive(get_q, recv_buff, sizeof(recv_buff), NULL);
 
   // get segment size from preliminary message
 
@@ -174,7 +202,7 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *pri
   int seg_count = 0;
   int seg_size = 0;
   unsigned long f_len = 0;
-  printf("about to parse\n");
+  printf("about to parse this prelim: >>%s<<\n", recv_buff);
   printf("recv buff message: %s. message len: %lu\n", recv_buff, strlen(recv_buff));
   int *seg_array = calloc(MAX_SEGMENTS_IN_PASS, sizeof(int));
   parse_server_message(&seg_array, recv_buff, &f_len, &seg_count, &seg_size);
@@ -190,8 +218,10 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *pri
 
   int ii = 0;
   while (ii < segments_needed) {
+    printf("in main sender loop, sleeping then waiting for message\n");
+    sleep(SLEEP_TIME);
     // blocking call - the server sends one each time data is ready to be accepted
-    int stat = mq_receive(*private_q, recv_buff, sizeof(recv_buff), NULL);
+    int stat = mq_receive(get_q, recv_buff, sizeof(recv_buff), NULL);
 
     ///// reparse here
     seg_count = 0;
@@ -223,12 +253,17 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *pri
 
     // now send ACK to the server
     struct mq_attr attr;
-    mq_getattr(*private_q, &attr);
+    mq_getattr(put_q, &attr);
     /* attr.mq_curmsgs */
-    printf("length of q: %d\n", attr.mq_curmsgs);
-    printf("about to ack server\n");
+    printf("length of q: %ld\n", attr.mq_curmsgs);
+    printf("in main sender loop - sleeping then about to ack server\n");
     // is queue full???
-    stat = mq_send(*private_q, "OK", 3, 0);
+
+    /* sleep for 5 seconds before sending ack, for debugging */
+    sleep(SLEEP_TIME);
+    printf("finished sleep\n");
+
+    stat = mq_send(put_q, "OKs -- good in send", 3, 0); // it seems like the server is never reading this
     printf("acked --------------------------------------*************\n");
 
     if (stat == -1) {
@@ -242,15 +277,34 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, mqd_t *pri
     printf("end of while loop client send\n");
   }
   free(seg_array);
+  close(get_q);
+  close(put_q);
 
   // TODO: anything else?
 }
 
-void receive_compressed_data(mqd_t *private_q, char **comp_data_buffer, unsigned long *compressed_len) {
+void receive_compressed_data(unsigned long *compressed_len, char **comp_data_buffer, int get_q_id, int put_q_id) {
+  printf(":::::::::::::: client side: receive_compressed_data\n");
+
+  char getQPath[128];
+  sprintf(getQPath, "/%d", get_q_id);
+  mqd_t get_q = mq_open(getQPath, O_RDWR);
+
+  char putQPath[128];
+  sprintf(putQPath, "/%d", put_q_id);
+  mqd_t put_q = mq_open(putQPath, O_RDWR);
+
+
   // server sends preliminary message for this transaction too -- just makes things easier
   // preliminary message has the segment size and the compressed len size
-  char recv_buff[2048 * 4];
-  int status = mq_receive(*private_q, recv_buff, sizeof(recv_buff), NULL);
+  char recv_buff[130];
+  /* char *recv_buff = calloc(2048, sizeof(char)); // stack smashing detected... */
+  printf("sizeof(recv_buff): %ld\n", sizeof(recv_buff));
+  int status = mq_receive(get_q, recv_buff, 130, NULL);
+  printf("entire server msg before parsing: >>%s<<\n", recv_buff); // the msg is "OKs" -- wot
+  // sometimes we get lucky and get the actual server message, sometimes we "OKs"
+  // I have no idea how or why this happens
+
 
   // get segment size from preliminary message
 
@@ -262,7 +316,10 @@ void receive_compressed_data(mqd_t *private_q, char **comp_data_buffer, unsigned
   printf("successful parse 3\n");
   // seg_size, seg_array, seg_count
 
-  int segments_needed = (*compressed_len / seg_size);
+  printf("entire server msg: >>%s<<\n", recv_buff); // the msg is "OK" -- wot
+  printf("info: seg_size: %d\n", seg_size);
+
+  int segments_needed = (*compressed_len / seg_size); // arithmetic exception??
   if (*compressed_len % seg_size != 0)
     segments_needed++;
 
@@ -271,7 +328,8 @@ void receive_compressed_data(mqd_t *private_q, char **comp_data_buffer, unsigned
   int ii = 0;
   while (ii < segments_needed) {
     // blocking call - the server sends one each time data is ready to be accepted
-    int stat = mq_receive(*private_q, recv_buff, sizeof(recv_buff), NULL);
+    printf("about to main recieve in the recv compressed data part\n");
+    int stat = mq_receive(get_q, recv_buff, sizeof(recv_buff), NULL);
 
     ///// reparse here
     seg_count = 0;
@@ -302,12 +360,14 @@ void receive_compressed_data(mqd_t *private_q, char **comp_data_buffer, unsigned
     }
 
     // now send ACK to the server
-    stat = mq_send(*private_q, "OK", 3, 0);
+    stat = mq_send(put_q, "OKr- good in recv", 3, 0);
 
     ii += seg_count;
   }
 
   free(seg_array);
+  close(get_q);
+  close(put_q);
 }
 
 
@@ -368,39 +428,7 @@ void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *retu
 
 }
 
-unsigned char *get_compressed_data(char *return_message_buffer) {
-  // size:segment_id in the return_message_buffer
-
-  // need to grab the compressed len and the segment id from the message
-  int i =  0;
-  char compressedLenBuffer[64];
-  while (return_message_buffer[i] != ':') {
-    // then we know stuff
-    compressedLenBuffer[i] = return_message_buffer[i];
-    i++;
-  }
-  compressedLenBuffer[i] = '\0';
-
-  char **f;
-  unsigned long compressed_len = strtoul(compressedLenBuffer, f, 10);
-
-  int segment_id = atoi(return_message_buffer);
-
-  char *sh_mem = (char *) shmat(segment_id, NULL, 0);
-
-  // memcpy stuff from shared mem to the compressed data buffer
-  // TODO:
-
-  unsigned char *compressed_data_buffer = (char *) malloc(compressed_len);
-
-
-  memcpy(compressed_data_buffer, sh_mem, compressed_len);
-
-
-  return compressed_data_buffer;
-}
-
-unsigned char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len) {
+char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len) {
   // qclient.c code here
   // but not the file reader part
 
@@ -425,9 +453,10 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len, unsig
    */
 
 
-  mqd_t *private_q = malloc(sizeof(mqd_t));
   // TODO: check for null
-  int  private_q_id = establish_communicator_channel(file_len, private_q);
+  int get_q_id = 0;
+  int put_q_id = 0;
+  establish_communicator_channel(file_len, &get_q_id, &put_q_id);
   /* int mq_ret = mq_send(*private_q, "hello", 6, 0); */
   /* if (mq_ret == -1){ */
   /*   printf(" messeage que is not working tmp\n"); */
@@ -444,53 +473,33 @@ unsigned char * sync_compress(unsigned char *data, unsigned long file_len, unsig
   // this makes it way easier to implement and is allowed
 
 
-  send_data_to_server(file_len, data, private_q);
+  send_data_to_server(file_len, data, get_q_id, put_q_id);
 
   // allocate a buffer for the compressed data -- its ok to allocate too much memory
   char *compressed_data_buffer = (char *) malloc(file_len);
+  printf("sleeping, then moving to the next phase--\n");
+  /* sleep(100); */
 
   // we dont need threads for sync mode
-  receive_compressed_data(&private_q, &compressed_data_buffer, compressed_len);
+  receive_compressed_data(compressed_len, &compressed_data_buffer, get_q_id, put_q_id);
 
   // now destroy the message queue that was used to get the compressed file back
-  printf("about to close and destroy the client q\n");
-  mq_close(*private_q);
+  printf("about to close and destroy the client Qs\n");
   char idPath[9];
-  sprintf(idPath, "/%d", private_q_id);
+  sprintf(idPath, "/%d", get_q_id);
+  mq_unlink(idPath);
+
+  sprintf(idPath, "/%d", put_q_id);
   mq_unlink(idPath);
 
 
-
-
-  char *return_message_buffer;
-  return get_compressed_data(return_message_buffer);
+  return compressed_data_buffer;
 }
 
 
-unsigned char * async_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len) {
-  // TODO: right now this is the same as sync mode
-
-
-  mqd_t return_q;
-  int  return_q_id = 0;
-  send_original_file(data, file_len, &return_q, &return_q_id);
-
-  char return_message_buffer[64]; // should probably unify these sizes
-
-  // now do sync call to wait to receive a message back
-  printf("about to read from the return q\n");
-  mq_receive(return_q, return_message_buffer, sizeof(return_message_buffer), NULL);
-  /* printf("message queue has: %s\n", return_message_buffer); */
-
-  // now destroy the message queue that was used to get the compressed file back
-  mq_close(return_q);
-  char idPath[9];
-  sprintf(idPath, "/%d", return_q_id);
-  mq_unlink(idPath);
-
-
-  return get_compressed_data(return_message_buffer);
-
+char * async_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len) {
+  // TODO:
+  return NULL;
 }
 
 void print_stuff() {

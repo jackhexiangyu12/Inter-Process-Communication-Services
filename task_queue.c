@@ -75,7 +75,8 @@ int queue_size(object_q *q) {
 
   task_node *curr = q->list_head;
   int size = 1;
-  while (curr->next != NULL) {
+  while (curr->next != NULL) { // this is not working
+    printf("another loop iter\n");
     curr = curr->next;
     size++;
   }

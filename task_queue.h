@@ -2,7 +2,9 @@
 
 typedef struct compression_task {
   // idk what metadata this needs - should copy from uthreads
-  int message_queue_id;
+  /* int message_queue_id; // not anymore */
+  int get_queue_id;
+  int put_queue_id;
   int segment_id; // dont need anymore
   int data_len; // wot
   int segment_index; // not sure if this is needed anymore
@@ -12,7 +14,9 @@ typedef struct compression_task {
 
 typedef struct client_task {
   // idk what metadata this needs - should copy from uthreads
-  int message_queue_id; // for the client's private message queue
+  int get_queue_id;
+  int put_queue_id;
+  /* int message_queue_id; // for the client's private message queue */
   unsigned long file_len; // of the file being compressed
   short is_done; // not sure if this is needed anymore
 } cltask;

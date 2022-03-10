@@ -13,6 +13,7 @@
 #include <sys/stat.h>
 #include <sys/shm.h>
 #include <pthread.h>
+#include <errno.h>
 
 #include "snappy.h"
 #include "task_queue.h"
@@ -46,6 +47,17 @@ mqd_t setup_main_q() {
   return mq_create;
 }
 
+void release_segments(int available_segment_count, seg_data_t ***available_segments) {
+  // should abstract this
+  pthread_mutex_lock(&mem_info.lock);
+  for (int i = 0; i < available_segment_count; i++) {
+    // TODO: this needs to be a list of pointers to segment structs rather than ints
+    (*available_segments)[i]->in_use = 0;
+  }
+  mem_info.used_seg_count -= available_segment_count;
+  pthread_mutex_unlock(&mem_info.lock);
+}
+
 // need function where you give it a byte array, and it puts a proper shared memory message on q
 
 
@@ -66,8 +78,9 @@ int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
     //  yield the thread manually?
     // TODO: examine this behavior to see if it is desirable
     pthread_mutex_unlock(&mem_info.lock);
-    sched_yield();
+    sched_yield(); // this logic doesnt really work ?
     pthread_mutex_lock(&mem_info.lock);
+    // TODO: actually implement this function properly without deadlocks
   }
 
 
@@ -127,7 +140,7 @@ void *check_clientq() {
     if (curr_client == NULL)
       /* sched_yield(); // helpful?  */
       continue;
-    printf("got a client task\n");
+    printf("running a client task\n");
 
     // then need to grab the max amount of segments that we are allotted, but only enough for the file
 
@@ -143,28 +156,38 @@ void *check_clientq() {
 
     // time for some unholy hacks bc im too lazy to code it correctly bc imagine having String.join() in a programming language standard library
 
-    char *message_buffer = calloc(2048, sizeof(char));
+    char *message_buffer = calloc(129, sizeof(char));
     // TODO: ok to send zero as file len?
-    prep_segment_avail_metadata_msg(&message_buffer, 0, available_segment_count, &available_segments);
+    prep_segment_avail_metadata_msg(&message_buffer, curr_client->client->file_len, available_segment_count, &available_segments);
 
     // now the message buffer is good to be sent to the client
 
-    char messagePath[128];
-    sprintf(messagePath, "/%d", curr_client->client->message_queue_id);
-    mqd_t client_mq = mq_open(messagePath, O_RDWR);
+    // open up the send and listen queues
+
+    char getQPath[128];
+    sprintf(getQPath, "/%d", curr_client->client->get_queue_id);
+    mqd_t client_mq_get = mq_open(getQPath, O_RDWR);
+
+    char putQPath[128];
+    sprintf(putQPath, "/%d", curr_client->client->put_queue_id);
+    mqd_t client_mq_put = mq_open(putQPath, O_RDWR);
+
+    printf("both q ids: %d %d\n", curr_client->client->get_queue_id, curr_client->client->put_queue_id);
 
 
     // send the preliminary data message to client, then send the availability message
 
-    printf("%s\n", message_buffer);
-    printf("client mq path: %s\n", messagePath);
-    int ret_stat = mq_send(client_mq, message_buffer, strlen(message_buffer) + 1, 0);
+    printf("prepped message: %s\n", message_buffer);
+    printf("client mq get path: %s\n", getQPath);
+    printf("client mq put path: %s\n", putQPath);
+    sleep(SLEEP_TIME);
+    int ret_stat = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
 
     if (ret_stat == -1) {
       printf(" messeage que is not working 1\n");
 
     } else {
-      printf("sent a preliminary client q message\n");
+      printf("successfully sent a preliminary client q message\n");
     }
 
 
@@ -181,30 +204,35 @@ void *check_clientq() {
     // keep track of how many more segments we need to grab
     int segments_to_recv = segments_needed;
     for (int i = 0; i < segments_needed; i += available_segment_count) { // TODO: should cover everything?
-      int ret_status = mq_send(client_mq, message_buffer, strlen(message_buffer) + 1, 0);
+      printf("in clientq handler main loop - sleeping then sending message\n");
+      sleep(SLEEP_TIME);
+      int ret_status = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
 
       if (ret_status == -1) {
         printf(" messeage que is not working 2\n");
 
       } else {
-        printf("sent a normal client q message\n");
+        printf("successfully sent a normal client q message\n");
       }
 
       // NOTE: this server thread works with the client library func send_data_to_server
 
       // after sending data to the client, wait for client to say its done packing the data
       // basically we are listening for an ACK -- dont verify the content bc i dont care about error checking
+      printf("about to listen for client ACK\n");
       char tmp[256];
-      ret_status = mq_receive(client_mq, tmp, 11, NULL);
-      printf("variable?: %s\n", tmp);
+
+      ret_status = mq_receive(client_mq_put, tmp, 256, 0);
+      printf("ACK?: %s\n", tmp); // the ack is being read incorrectly
       // TODO: error handling? dont assume the message is "OK" ?
       if (ret_status == -1) {
         printf(" messeage que is not working 3\n");
+        int err = errno;
+        printf("error code: %d\n", err);
 
       } else {
         printf("Message q is working\n");
       }
-
 
       for (int j = 0; j < available_segment_count; j++) {
         if (segments_to_recv == 0)
@@ -231,21 +259,31 @@ void *check_clientq() {
         // TODO: i really hope this is right ^^
       }
     }
+    mq_close(client_mq_put);
+    mq_close(client_mq_get);
     free(message_buffer);
+    // TODO: free the node and the task object
 
     // now ALL the file data is in the file_buffer
     // need to attach the file_buffer to a new compression task and put it on the queue
     ctask *comp_task = (ctask *) malloc(sizeof(ctask));
     comp_task->file_len = curr_client->client->file_len;
-    comp_task->message_queue_id = curr_client->client->message_queue_id;
+    comp_task->get_queue_id = curr_client->client->get_queue_id;
+    comp_task->put_queue_id = curr_client->client->put_queue_id;
+    /* comp_task->message_queue_id = curr_client->client->message_queue_id; */
     comp_task->file_buffer = &file_buffer;
 
     task_node *comp_node = (task_node *) malloc(sizeof(comp_node));
     comp_node->task = comp_task;
+    comp_node->client = NULL;
+    comp_node->next = NULL; // extremely important apparently
 
     pthread_mutex_lock(&task_q.lock);
     add_to_list(&task_q, comp_node);
     pthread_mutex_unlock(&task_q.lock);
+
+    release_segments(available_segment_count, &available_segments);
+    free(available_segments);
   }
 }
 
@@ -257,7 +295,7 @@ static void *work_thread(void *arg) {
   while (1) {
     pthread_mutex_lock(&task_q.lock);
     if (queue_size(&task_q) > 0) {
-      printf("got a compression task\n");
+      printf("got a compression task -----------------------------------------------------------------------------------------------------------------------\n");
       // then do stuff
       task_node *current_task = remove_head(&task_q);
       pthread_mutex_unlock(&task_q.lock);
@@ -299,12 +337,28 @@ static void *work_thread(void *arg) {
 
       // TODO: check for deadlocks
 
-      char mqPath[128];
-      sprintf(mqPath, "/%d", task.message_queue_id);
-      mqd_t client_mq = mq_open(mqPath, O_RDWR);
+      char getQPath[128];
+      sprintf(getQPath, "/%d", task.get_queue_id);
+      mqd_t client_mq_get = mq_open(getQPath, O_RDWR);
+
+      char putQPath[128];
+      sprintf(putQPath, "/%d", task.put_queue_id);
+      mqd_t client_mq_put = mq_open(putQPath, O_RDWR);
 
       char *message_buffer = calloc(2048, sizeof(char));
       prep_segment_avail_metadata_msg(&message_buffer, compressed_len, available_segment_count, &available_segments);
+
+
+      // need to send preliminary message
+      printf("about to send this message in work thread: %s\n", message_buffer);
+      int ret_status = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
+
+        if (ret_status == -1) {
+          printf(" messeage que is not working 4.1?\n");
+
+        } else {
+          printf("Message q is working -- sent work thread prelim\n");
+        }
 
       int segments_needed = (task.file_len / mem_info.seg_size);
       if (task.file_len % mem_info.seg_size != 0)
@@ -333,39 +387,37 @@ static void *work_thread(void *arg) {
 
 
 
-        int ret_status = mq_send(client_mq, message_buffer, strlen(message_buffer) + 1, 0);
+        ret_status = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
 
         if (ret_status == -1) {
           printf(" messeage que is not working 4\n");
 
         } else {
-          printf("Message q is working\n");
+          printf("Message q is working -- sent work thread main msg\n");
         }
 
         // now wait for an ACK from the client -- no error handling implemented
 
-        char tmp[2048];
-        ret_status = mq_receive(client_mq, tmp, strlen(tmp) + 1, 0);
+        char tmp[256];
+        ret_status = mq_receive(client_mq_put, tmp, 256, 0);
         // TODO: error handling? dont assume the message is "OK" ?
         if (ret_status == -1) {
           printf(" messeage que is not working 5\n");
-
+          int err = errno;
+          printf("error code: %d\n", err);
         } else {
           printf("Message q is working - recv 5\n");
         }
       }
       free(message_buffer);
+      mq_close(client_mq_put);
+      mq_close(client_mq_get);
 
 
-      // then free the segment
+      // then free the segments
 
-      pthread_mutex_lock(&mem_info.lock);
-      for (int i = 0; i < available_segment_count; i++) {
-        // TODO: this needs to be a list of pointers to segment structs rather than ints
-        available_segments[i]->in_use = 0;
-      }
-      mem_info.used_seg_count -= available_segment_count;
-      pthread_mutex_unlock(&mem_info.lock);
+      release_segments(available_segment_count, &available_segments);
+      free(available_segments);
 
     } else {
       pthread_mutex_unlock(&task_q.lock);
@@ -412,11 +464,15 @@ static void *listen_thread(void *arg) {
     // add to the client queue
     // message is %d%lu:, mqid, file_len
 
-    char mqId[QUEUE_ID_LEN + 1];
-    memcpy(mqId, recieve_buffer, QUEUE_ID_LEN);
-    mqId[QUEUE_ID_LEN] = '\0';
+    char getQId[QUEUE_ID_LEN + 1];
+    memcpy(getQId, recieve_buffer, QUEUE_ID_LEN);
+    getQId[QUEUE_ID_LEN] = '\0';
 
-    int i = QUEUE_ID_LEN;
+    char putQId[QUEUE_ID_LEN + 1];
+    memcpy(putQId, recieve_buffer + (QUEUE_ID_LEN * sizeof(char)), QUEUE_ID_LEN);
+    putQId[QUEUE_ID_LEN] = '\0';
+
+    int i = QUEUE_ID_LEN * 2;
     int j = 0;
     char dataLenBuffer[64];
     while (recieve_buffer[i] != ':') {
@@ -433,11 +489,15 @@ static void *listen_thread(void *arg) {
     cltask *task = (cltask *) malloc(sizeof(cltask));
 
     task->is_done = 0;
-    task->message_queue_id = atoi(mqId);
+    task->get_queue_id = atoi(getQId);
+    task->put_queue_id = atoi(putQId);
     task->file_len = file_len;
+    printf("initally parsed file len: %lu\n", file_len);
 
 
     node->client = task;
+    node->next = NULL;
+    node->task = NULL;
     //TODO:
     //add stuff to task?
 
@@ -541,12 +601,12 @@ int main() {
   pthread_t listen_thread_id;
   pthread_create(&listen_thread_id, NULL, listen_thread, (void *)lthread_arg);
 
-  /* pthread_t work_thread_id; */
-  /* pthread_create(&work_thread_id, NULL, work_thread, (void *)wthread_arg); */
-
 
   pthread_t check_client_thread_id;
   pthread_create(&check_client_thread_id, NULL, check_clientq, NULL);
+
+  pthread_t work_thread_id;
+  pthread_create(&work_thread_id, NULL, work_thread, (void *)wthread_arg);
 
   int dont_halt = 1;
   char command_buffer[128];
@@ -556,11 +616,22 @@ int main() {
     fgets(command_buffer, 128, stdin);
 
     const char *killCmd = "stop\n";
+    const char *print_segs = "psegs\n";
     if (strcmp(killCmd, command_buffer) == 0) {
       // flush the main queue
       mq_close(main_q);
       mq_unlink(MAIN_QUEUE_PATH);
       dont_halt = 0;
+    }
+
+    if (strcmp(print_segs, command_buffer) == 0) {
+      printf("---------------\n");
+      pthread_mutex_lock(&mem_info.lock);
+      for (int i = 0; i < mem_info.seg_count; i++) {
+        printf("segment: %d, in_use? %d\n", i, mem_info.data_array[i].in_use);
+      }
+      pthread_mutex_unlock(&mem_info.lock);
+      printf("_____--------------\n");
     }
   }
   snappy_free_env(wthread_arg->env);

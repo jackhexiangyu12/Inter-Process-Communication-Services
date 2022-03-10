@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "client_library.h"
 
 int main(int argc, char *argv[]) {
@@ -14,7 +15,7 @@ int main(int argc, char *argv[]) {
   FILE *file, *file1;
 
   //open the file
-  file = fopen("client_input.txt", "r+");
+  file = fopen("inputs/Tiny.txt", "r+");
   file1 = fopen("compressed", "rw");
   if (file == NULL) {
     fprintf(stderr, "Unable to open file %s\n", argv[1]);
@@ -41,7 +42,9 @@ int main(int argc, char *argv[]) {
 
   unsigned long compressed_len = 0;
   char * compressed_file_buffer = sync_compress(buffer, file_len, &compressed_len);
+  printf("just finished sync compress\n");
   fprintf(file1, "The text: %s\n", compressed_file_buffer);
 
 
+  return 0;
 }

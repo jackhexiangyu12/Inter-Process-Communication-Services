@@ -9,6 +9,8 @@
 
 #define QUEUE_ID_LEN (7)
 
+#define SLEEP_TIME (0)
+
 typedef struct segment_metadata_block {
   int segment_id;
   short in_use;
