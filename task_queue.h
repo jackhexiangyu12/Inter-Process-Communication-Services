@@ -9,7 +9,7 @@ typedef struct compression_task {
   int data_len; // wot
   int segment_index; // not sure if this is needed anymore
   unsigned long file_len;
-  char **file_buffer; // points to a buffer for the file, in heap space
+  char *file_buffer; // points to a buffer for the file, in heap space
 } ctask;
 
 typedef struct client_task {
@@ -19,6 +19,12 @@ typedef struct client_task {
   /* int message_queue_id; // for the client's private message queue */
   unsigned long file_len; // of the file being compressed
   short is_done; // not sure if this is needed anymore
+  short fresh; // init to 1 -- set to zero after sending prelim
+  char *file_buffer; // points to a buffer for the file, in heap space
+
+  int segment_index; // acts as the 'i' index from the main loop
+  int total_segments_needed;
+  int segments_remaining; // keep track of how many left
 } cltask;
 
 

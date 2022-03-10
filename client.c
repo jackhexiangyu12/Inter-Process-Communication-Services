@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include "client_library.h"
 
+#include "snappy.h"
+
 int main(int argc, char *argv[]) {
   printf("this is the client\n");
   print_stuff();
@@ -42,7 +44,27 @@ int main(int argc, char *argv[]) {
 
   unsigned long compressed_len = 0;
   char * compressed_file_buffer = sync_compress(buffer, file_len, &compressed_len);
-  printf("just finished sync compress\n");
+  printf("just finished sync compress. here is the compressed data\n");
+  printf("%s\n", compressed_file_buffer);
+
+
+
+  struct snappy_env *env = (struct snappy_env *) malloc(sizeof(struct snappy_env));
+  snappy_init_env(env);
+
+  char *uncomped = (char *) malloc(file_len);
+
+  int snappy_status = snappy_uncompress(compressed_file_buffer, compressed_len, uncomped);
+
+
+  printf("uncompressed, trying to print the uncomped data\n");
+  printf("%s\n", uncomped);
+
+
+
+  snappy_free_env(env);
+
+
   fprintf(file1, "The text: %s\n", compressed_file_buffer);
 
 

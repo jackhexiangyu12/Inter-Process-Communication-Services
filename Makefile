@@ -14,9 +14,9 @@ task_queue.o: task_queue.c task_queue.h
 
 client_library.o: client_library.c client_library.h include.h
 
-client.o: client.c
+client.o: client.c snappy.h client_library.h
 
-CLIENT_OBJECTS = client.o client_library.o
+CLIENT_OBJECTS = client.o client_library.o snappy.o
 client: $(CLIENT_OBJECTS)
 	$(CC) $(CFLAGS) $(CLIENT_OBJECTS) -o client $(LDFLAGS)
 
