@@ -386,8 +386,8 @@ static void *work_thread(void *arg) {
           printf("Message q is working -- sent work thread prelim\n");
         }
 
-      int segments_needed = (task.file_len / mem_info.seg_size);
-      if (task.file_len % mem_info.seg_size != 0)
+      int segments_needed = (compressed_len / mem_info.seg_size);
+      if (compressed_len % mem_info.seg_size != 0)
           segments_needed++;
       int segments_to_recv = segments_needed;
       for (int i = 0; i < segments_needed; i += available_segment_count) { // TODO: does this work
