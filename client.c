@@ -19,13 +19,13 @@ void *async( void *async_data){
   flag = 1;
 }
 
-void call_compress( FILE **file1, int is_async, char *filename, int len_ ){
+int call_compress( FILE **file1, int is_async, char *filename, int len_ ){
   int len = len_;
-  
+
   char buf[len];
   if (multiple)
   buf[strcspn(buf, "\n")] = 0;
-  char *f_name = strncpy(buf, filename, len); 
+  char *f_name = strncpy(buf, filename, len);
   FILE *file = fopen(buf, "r");
   if (file == NULL){
     fprintf(stderr, "Unable to open file 2 %s\n", buf);
@@ -38,7 +38,7 @@ void call_compress( FILE **file1, int is_async, char *filename, int len_ ){
   unsigned char *buffer;
   unsigned long file_len;
   //file1 = fopen("compressed", "w+");
-  
+
 
   //Get file length
   fseek(file, 0, SEEK_END);
@@ -66,7 +66,7 @@ void call_compress( FILE **file1, int is_async, char *filename, int len_ ){
     async_data->compressed_len = &compressed_len;
     async_data->file_len = file_len;
     async_data->compressed_file_buffer = compressed_file_buffer;
-    pthread_create(&async_id, NULL, async, (void*)async_data); 
+    pthread_create(&async_id, NULL, async, (void*)async_data);
     //printf("This is printing before the program completion\n");
   }else{
     flag = 1;
@@ -81,7 +81,7 @@ void call_compress( FILE **file1, int is_async, char *filename, int len_ ){
     file_len = async_data->file_len;
     compressed_len = async_data->compressed_len;
   }
-  
+
 
   printf("just finished sync compress. here is the compressed data\n");
   printf("%s\n", compressed_file_buffer);
@@ -115,7 +115,7 @@ int main(int argc, char *argv[]) {
   print_stuff();
   if (argc != 5){
     printf("incorrect number of args\nargs format: ./sample_app --file <input_file> --state <SYNC | ASYNC>");
-    return;
+    return 1;
   }
 
   char *arg1 = argv[1];
@@ -128,7 +128,7 @@ int main(int argc, char *argv[]) {
   else if (strcmp(arg4, "SYNC" ) == 0) is_async = 0;
   if (is_async == -1){
     printf("incorrect number of args\nargs format: ./sample_app --file <input_file> --state <SYNC | ASYNC>");
-    return;
+    return 1;
   }
 
   if (strcmp(arg1, "--file" ) == 0 && strcmp(arg3, "--state") == 0){
@@ -140,14 +140,14 @@ int main(int argc, char *argv[]) {
   }
   else{
     printf("incorrect number of args\nargs format: ./sample_app --file <input_file> --state <SYNC | ASYNC>");
-    return;
+    return 1;
   }
 
 
 
   // read in file and put into buffer
   //Create and open file for send
-  
+
   FILE *file, *file1;
 
   //open the file
@@ -181,6 +181,6 @@ int main(int argc, char *argv[]) {
   }
 
 
-  
-  
+
+
 }
