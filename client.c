@@ -47,7 +47,7 @@ int main(int argc, char *argv[]) {
 
   //open the file
   file = fopen(argv[2], "r+");
-  file1 = fopen(argv[2], "w+");
+  file1 = fopen("compressed", "w+");
   if (file == NULL) {
     fprintf(stderr, "Unable to open file %s\n", argv[1]);
     return 1;
