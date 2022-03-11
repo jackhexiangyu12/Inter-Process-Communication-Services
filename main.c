@@ -459,7 +459,7 @@ void *improved_check_clientq() {
       // the meta node should already be in the meta queue
 
       // unlock the meta node
-      pthread_mutex_lock(&current_client_meta_node->lock);
+      pthread_mutex_unlock(&current_client_meta_node->lock);
 
 
       /* pthread_mutex_lock(&task_q.lock); */
