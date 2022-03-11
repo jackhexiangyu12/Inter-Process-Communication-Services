@@ -7,11 +7,34 @@
 int main(int argc, char *argv[]) {
   printf("this is the client\n");
   print_stuff();
-  if (argc != 3){
-    printf("incorrect number of args\nargs format: <input_file> <compressed_file_name>");
+  if (argc != 5){
+    printf("incorrect number of args\nargs format: ./sample_app --file <input_file> --state <SYNC | ASYNC>");
     return;
   }
 
+  char *arg1 = argv[1];
+  char *arg2 = argv[2];
+  char *arg3 = argv[3];
+  char *arg4 = argv[4];
+  int is_async = -1; // used to call async
+  int multiple_files; //loop through file and reads
+  if (strcmp(arg4, "ASYNC" ) == 0) is_async = 1;
+  else if (strcmp(arg4, "SYNC" ) == 0) is_async = 0;
+  if (is_async == -1){
+    printf("incorrect number of args\nargs format: ./sample_app --file <input_file> --state <SYNC | ASYNC>");
+    return;
+  }
+
+  if (strcmp(arg1, "--file" ) == 0 && strcmp(arg3, "--state") == 0){
+    multiple_files = 0;
+  }
+  else if (strcmp(arg1, "--files") == 0 && strcmp(arg3, "--state") == 0){
+    multiple_files = 1;
+  }
+  else{
+    printf("incorrect number of args\nargs format: ./sample_app --file <input_file> --state <SYNC | ASYNC>");
+    return;
+  }
 
 
 
@@ -23,7 +46,7 @@ int main(int argc, char *argv[]) {
   FILE *file, *file1;
 
   //open the file
-  file = fopen(argv[1], "r+");
+  file = fopen(argv[2], "r+");
   file1 = fopen(argv[2], "w+");
   if (file == NULL) {
     fprintf(stderr, "Unable to open file %s\n", argv[1]);
