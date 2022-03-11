@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "task_queue.h"
 
 
@@ -39,48 +40,55 @@ void print_list(object_q *q, int grab_lock) {
     pthread_mutex_unlock(&q->lock);
 }
 
+// need to transition this to circular
 void add_to_list(object_q *q, task_node *t_node) {
   // should already have a lock on the list
   if (q->list_head == NULL) {
     // then set the lsit to the node
     q->list_head = t_node;
+    t_node->next = t_node;
+    q->size++;
     // print_list(list, 0);
     return;
   }
 
-  if (q->list_head->next == NULL) {
+  if (q->size == 1) {
+    q->size++;
+    t_node->next = q->list_head;
     q->list_head->next = t_node;
     return;
   }
 
-  // otherwise gotta find the end
-  task_node *curr = q->list_head;
-  while (curr->next != NULL) {
-    /* dprint("looping"); */
-    curr = curr->next;
-  }
-  // now curr is null
 
-  curr->next = t_node;
-  // print_list(list, 0);
+  // else, large size
+  q->size++;
 
+  // allocate a new node -- this new node will hold the head's data
+  // the head will then get the new data
+  // then bump the head pointer
+  task_node *new_node = (task_node *) malloc(sizeof(task_node));
+  new_node->client = q->list_head->client;
+  new_node->task = q->list_head->task;
+
+  new_node->next = q->list_head->next;
+
+  q->list_head->next = new_node;
+
+  // finish swaping head and next data
+
+  q->list_head->client = t_node->client;;
+  q->list_head->task = t_node->task;;
+
+  q->list_head = q->list_head->next;
+
+  free(t_node);
+
+  return;
 }
 
+
 int queue_size(object_q *q) {
-  if (q->list_head == NULL)
-    return 0;
-
-  if (q->list_head->next == NULL)
-    return 1;
-
-  task_node *curr = q->list_head;
-  int size = 1;
-  while (curr->next != NULL) { // this is not working
-    printf("another loop iter\n");
-    curr = curr->next;
-    size++;
-  }
-  return size;
+  return q->size;
 }
 
 task_node *remove_head(object_q *q) {
@@ -88,12 +96,42 @@ task_node *remove_head(object_q *q) {
 
   if (q->list_head == NULL) {
     // return error -- TODO
+    /* int *crash = NULL; */
+    /* int hi = *crash; */
     return NULL;
   }
 
-  task_node *return_node = q->list_head;
 
-  q->list_head = return_node->next;
+  if (q->size == 1) {
+    q->size = 0;
+
+    task_node *node = q->list_head;
+
+    q->list_head = NULL;
+
+    return node;
+  }
+
+  // else, variable size
+  q->size--;
+
+  // make a new dummy node
+  task_node *return_node = (task_node *) malloc(sizeof(task_node));
+  return_node->client = q->list_head->client;
+  return_node->task = q->list_head->task;
+  return_node->next = NULL;
+
+  // put the second node's data into the head node
+
+  task_node *second_node = q->list_head->next;
+
+  q->list_head->client = second_node->client;
+  q->list_head->task = second_node->task;
+
+  // skip over the second node (that now has duplicate data)
+
+  q->list_head->next = second_node->next;
+
 
 
   return return_node;

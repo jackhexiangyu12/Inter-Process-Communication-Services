@@ -44,6 +44,7 @@ typedef struct task_list_node {
 
 typedef struct __active_queue {
   task_node *list_head;
+  int size;
   pthread_mutex_t lock;
 } object_q;
 

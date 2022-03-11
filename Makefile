@@ -23,7 +23,7 @@ client: $(CLIENT_OBJECTS)
 
 main.o: main.c include.h snappy.h client_library.h
 
-MAIN_OBJECTS = main.o task_queue.o snappy.o
+MAIN_OBJECTS = main.o task_queue.o snappy.o client_library.o
 main: $(MAIN_OBJECTS)
 	$(CC) $(CFLAGS) $(MAIN_OBJECTS) -o main $(LDFLAGS)
 
