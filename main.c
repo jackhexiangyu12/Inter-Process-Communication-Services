@@ -659,7 +659,8 @@ static void *listen_thread(void *arg) {
   return NULL;
 }
 
-int main() {
+
+int main(int argc, char* argv[]) {
   /*
 
     set up message queue for use
@@ -670,29 +671,36 @@ int main() {
 
 
    */
-
+  int inx;
+  if (argc != 5){
+    printf("wrong usage\n");
+    return;
+  }
 
   // hardcode until get arg parsing
-  int segment_count = 20;
-  int segment_size_in_bytes = 16384;
+  int *segment_count = (int *)malloc(sizeof(int));
+  int *segment_size_in_bytes = (int *)malloc(sizeof(int));
+  *segment_count = atoi(argv[2]);
+  *segment_size_in_bytes = atoi(argv[4]);
 
-  mem_info.seg_count = segment_count;
-  mem_info.seg_size = segment_size_in_bytes;
+  mem_info.seg_count = *segment_count;
+  mem_info.seg_size = *segment_size_in_bytes;
+  printf("segment size: %d", mem_info.seg_size);
 
   if (pthread_mutex_init(&mem_info.lock, NULL) != 0) {
     printf("mutex init fail\n");
     return 1;
   }
 
-  mem_info.data_array = malloc(sizeof(seg_data_t) * segment_count);
+  mem_info.data_array = malloc(sizeof(seg_data_t) * (*segment_count));
   if (mem_info.data_array == NULL) {
     printf("out of mem\n");
     return 1;
   }
 
-  for (int i = 0; i < segment_count; i++) {
+  for (int i = 0; i < (*segment_count); i++) {
     /* mem_info.data_array[i]; */
-    int segment_id = shmget(IPC_PRIVATE, segment_size_in_bytes, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
+    int segment_id = shmget(IPC_PRIVATE, *segment_size_in_bytes, IPC_CREAT | IPC_EXCL | S_IRUSR | S_IWUSR);
     mem_info.data_array[i].segment_id = segment_id;
     mem_info.data_array[i].in_use = 0;
   }
