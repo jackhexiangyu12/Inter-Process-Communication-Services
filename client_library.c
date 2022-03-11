@@ -14,6 +14,7 @@
 #include <sys/stat.h>
 #include <sys/shm.h>
 #include <pthread.h>
+#include <sys/time.h>
 
 #include <time.h>
 
@@ -442,7 +443,15 @@ void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *retu
 
 }
 
+struct timeval cst_start;
+struct timeval cst_end;
+
 char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len) {
+
+
+  gettimeofday(&cst_start, NULL);
+
+
   // qclient.c code here
   // but not the file reader part
 
@@ -499,7 +508,19 @@ char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long 
 
   // we dont need threads for sync mode
   receive_compressed_data(compressed_len, &compressed_data_buffer, get_q_id, put_q_id);
+
   log_print("[LOG]: finished receiving the compressed data from the server\n");
+
+  gettimeofday(&cst_end, NULL);
+
+  suseconds_t start_time_secs = cst_start.tv_sec;
+  suseconds_t end_time_secs = cst_end.tv_sec;
+
+  suseconds_t start_time_micros = cst_start.tv_usec;
+  suseconds_t end_time_micros = cst_end.tv_usec;
+
+  printf("CST in micro seconds: %ld\n", ((end_time_secs - start_time_secs) * 1000000) + (end_time_micros - start_time_micros));
+
 
   // now destroy the message queue that was used to get the compressed file back
   db_print("about to close and destroy the client Qs\n");
