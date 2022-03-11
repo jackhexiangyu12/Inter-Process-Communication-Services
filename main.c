@@ -71,6 +71,30 @@ void print_error(int err) {
 
 }
 
+char * grab_shared_memory(int segment_id) {
+  // the shared memory library is buggy and sometimes returns -1
+  // this will hault the server rather than segfault
+  char *sh_mem = (char *) shmat(segment_id, NULL, 0);
+
+  char tmp[64];
+  sprintf(tmp, "%d", sh_mem);
+
+  int sh_mem_int = atoi(tmp);
+
+  if (sh_mem_int == -1) {
+
+    // try it one more time -- hope this works
+
+
+
+    printf("shared memory library is broken (see: https://www.ibm.com/support/pages/apar/IV79847). halting server. segment id: %d\n", segment_id);
+    while (1) {
+      // sad
+    }
+  }
+  return sh_mem;
+}
+
 void release_segments(int available_segment_count, seg_data_t ***available_segments) {
   // should abstract this
   pthread_mutex_lock(&mem_info.lock);
@@ -337,7 +361,7 @@ void *improved_check_clientq() {
       // (j + i) * (segment size) is the index into the buffer for memcpy
 
       int segment_id = available_segments[j]->segment_id;
-      char *sh_mem = (char *) shmat(segment_id, NULL, 0);
+      char *sh_mem = grab_shared_memory(segment_id);
 
       int offset = (j + curr_client->client->segment_index) * mem_info.seg_size;
       if (curr_client->client->segments_remaining == 0) {
@@ -355,6 +379,7 @@ void *improved_check_clientq() {
       /* memcpy(file_buffer + ((j + i) * mem_info.seg_size), sh_mem, mem_info.seg_size); */
 
       // TODO: i really hope this is right ^^
+      shmdt(sh_mem);
     }
 
     db_print("finished send for loop thingy\n");
@@ -581,7 +606,7 @@ static void *improved_work_thread(void *arg) {
           break; // yeet
         task->segments_remaining--;
         int segment_id = available_segments[j]->segment_id;
-        char *sh_mem = (char *) shmat(segment_id, NULL, 0);
+        char *sh_mem = grab_shared_memory(segment_id);
 
         int offset = (j + task->segment_index) * mem_info.seg_size;
         if (task->segments_remaining == 0) {
@@ -627,6 +652,7 @@ static void *improved_work_thread(void *arg) {
 
           free(dummy_buffer);
         }
+        shmdt(sh_mem);
 
       }
 
@@ -923,7 +949,7 @@ int main(int argc, char* argv[]) {
       printf("---------------\n");
       pthread_mutex_lock(&mem_info.lock);
       for (int i = 0; i < mem_info.seg_count; i++) {
-        printf("segment: %d, in_use? %d\n", i, mem_info.data_array[i].in_use);
+        printf("segment index: %d, id: %d, in_use? %d\n", i, mem_info.data_array[i].segment_id, mem_info.data_array[i].in_use);
       }
       pthread_mutex_unlock(&mem_info.lock);
       printf("_____--------------\n");
