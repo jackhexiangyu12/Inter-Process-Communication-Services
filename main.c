@@ -134,19 +134,20 @@ int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
   return amount_to_grab;
 }
 
-void prep_segment_avail_metadata_msg(char **message_buffer, unsigned long file_len, int segments_available_count, seg_data_t ***available_segments) {
+void prep_segment_avail_metadata_msg(char *message_buffer, unsigned long file_len, int segments_available_count, seg_data_t ***available_segments) {
   printf("pre prep message:: file_len: %lu, segs available (arr len): %d\n", file_len, segments_available_count);
 
 
-  sprintf(*message_buffer, "%d,%d,%lu,", mem_info.seg_size, segments_available_count, file_len);
+  sprintf(message_buffer, "%d,%d,%lu,", mem_info.seg_size, segments_available_count, file_len);
 
     // now put the segment ids into the buffer, horribly (im sorry)
 
   // TODO: this gets buggy -- adds duplicate copies of itself on the end or something
   for (int i = 0; i < segments_available_count; i++) {
-    char tmp[2048];
-    memcpy(tmp, *message_buffer, strlen(*message_buffer)); // bc idk if this would work without copying
-    sprintf(*message_buffer, "%s%d,", tmp, (*available_segments)[i]->segment_id); // segfaulting on second client
+    char *tmp = calloc(MAX_MESSAGE_LEN, sizeof(char));
+    memcpy(tmp, message_buffer, strlen(message_buffer)); // bc idk if this would work without copying
+    sprintf(message_buffer, "%s%d,", tmp, (*available_segments)[i]->segment_id); // segfaulting on second client
+    free(tmp);
   }
 }
 
@@ -179,7 +180,7 @@ void *improved_check_clientq() {
 
     char *message_buffer = calloc(MAX_MESSAGE_LEN, sizeof(char));
     // TODO: ok to send zero as file len?
-    prep_segment_avail_metadata_msg(&message_buffer, curr_client->client->file_len, available_segment_count, &available_segments);
+    prep_segment_avail_metadata_msg(message_buffer, curr_client->client->file_len, available_segment_count, &available_segments);
 
     // now the message buffer is good to be sent to the client
 
@@ -458,7 +459,7 @@ static void *improved_work_thread(void *arg) {
       mqd_t client_mq_put = mq_open(putQPath, O_RDWR);
 
       char *message_buffer = calloc(MAX_MESSAGE_LEN, sizeof(char));
-      prep_segment_avail_metadata_msg(&message_buffer, task->compressed_len, available_segment_count, &available_segments);
+      prep_segment_avail_metadata_msg(message_buffer, task->compressed_len, available_segment_count, &available_segments);
 
 
 
