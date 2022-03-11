@@ -17,6 +17,9 @@
 
 #define DO_COMPRESSION (1)
 
+
+#define DEBUG_WORK_MODE (0)
+
 typedef struct segment_metadata_block {
   int segment_id;
   short in_use;

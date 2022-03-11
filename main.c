@@ -887,8 +887,11 @@ int main(int argc, char* argv[]) {
   pthread_t check_client_thread_id;
   pthread_create(&check_client_thread_id, NULL, improved_check_clientq, NULL);
 
-  /* pthread_t work_thread_id; */
-  /* pthread_create(&work_thread_id, NULL, improved_work_thread, (void *)wthread_arg); */
+  if (DEBUG_WORK_MODE != 1) {
+    pthread_t work_thread_id;
+    pthread_create(&work_thread_id, NULL, improved_work_thread, (void *)wthread_arg);
+  }
+
 
 
   int dont_halt = 1;
@@ -920,8 +923,10 @@ int main(int argc, char* argv[]) {
 
     if (strcmp(workCmd, command_buffer) == 0) {
       printf("starting the work thread\n");
-      pthread_t work_thread_id;
-      pthread_create(&work_thread_id, NULL, improved_work_thread, (void *)wthread_arg);
+      if (DEBUG_WORK_MODE == 1) {
+        pthread_t work_thread_id;
+        pthread_create(&work_thread_id, NULL, improved_work_thread, (void *)wthread_arg);
+      }
     }
   }
   snappy_free_env(wthread_arg->env);
