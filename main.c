@@ -890,12 +890,12 @@ static void *listen_thread(void *arg) {
 
     // before adding the task to any queues, need to do meta_q stuff
 
-    pthread_mutex_lock(&meta_q.lock);
+    pthread_mutex_lock(&meta_q.lock); // hold this until completely done -- to avoid deadlocks
 
     // check metaq for this client
 
     meta_q_node_t *found_client = find_client_node(&meta_q, client_id);
-    pthread_mutex_unlock(&meta_q.lock);
+
 
     if (found_client == NULL) {
       // then stuff
@@ -931,11 +931,9 @@ static void *listen_thread(void *arg) {
 
 
       // this will take care of the next pointer stuffs and meta q size
-      pthread_mutex_lock(&meta_q.lock);
       add_to_meta_q(&meta_q, found_client);
 
 
-      pthread_mutex_unlock(&meta_q.lock);
 
 
     } else {
