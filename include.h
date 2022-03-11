@@ -17,7 +17,8 @@
 
 #define DO_COMPRESSION (1)
 
-#define DEBUG_PRINT (0)
+#define DEBUG_PRINT (1)
+// set to 0 for no debugging, set to 1 for minimal logging (log mode), set to 2 for intense logging with logs of garbage (debug mode)
 
 #define DEBUG_WORK_MODE (0)
 

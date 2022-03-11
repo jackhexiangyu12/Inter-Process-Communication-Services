@@ -22,7 +22,14 @@
 #include "include.h"
 
 int db_print(const char *format, ...) {
-  if (DEBUG_PRINT) {
+  if (DEBUG_PRINT > 1) {
+    va_list args;
+    printf(format, args);
+  }
+}
+
+int log_print(const char *format, ...) {
+  if (DEBUG_PRINT > 0) {
     va_list args;
     printf(format, args);
   }
@@ -464,6 +471,7 @@ char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long 
   int get_q_id = 0;
   int put_q_id = 0;
   establish_communicator_channel(file_len, &get_q_id, &put_q_id);
+  log_print("[LOG]: just created 2 private queues and sent inital request to server to be serviced\n");
   /* int mq_ret = mq_send(*private_q, "hello", 6, 0); */
   /* if (mq_ret == -1){ */
   /*   db_print(" messeage que is not working tmp\n"); */
@@ -481,6 +489,8 @@ char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long 
 
 
   send_data_to_server(file_len, data, get_q_id, put_q_id);
+  log_print("[LOG]: finished sending entire file to server\n");
+
 
   // allocate a buffer for the compressed data -- its ok to allocate too much memory
   char *compressed_data_buffer = (char *) malloc(file_len);
@@ -489,6 +499,7 @@ char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long 
 
   // we dont need threads for sync mode
   receive_compressed_data(compressed_len, &compressed_data_buffer, get_q_id, put_q_id);
+  log_print("[LOG]: finished receiving the compressed data from the server\n");
 
   // now destroy the message queue that was used to get the compressed file back
   db_print("about to close and destroy the client Qs\n");

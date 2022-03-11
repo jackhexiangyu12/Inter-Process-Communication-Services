@@ -396,10 +396,12 @@ void *improved_check_clientq() {
       comp_node->client = NULL;
       comp_node->next = NULL; // extremely important apparently
 
+      log_print("\n[LOG]: completed recieving an entire file from a client, now placing task into compression task queue\n");
 
       pthread_mutex_lock(&task_q.lock);
       add_to_list(&task_q, comp_node);
       pthread_mutex_unlock(&task_q.lock);
+
 
       /* free(curr_client); */
       /* free(curr_client->client); // idk if this is safe*/
@@ -484,6 +486,7 @@ static void *improved_work_thread(void *arg) {
           db_print("client q len (sleepy again): %d\n", client_q.size);
           /* pthread_mutex_unlock(&client_q.lock); */
           int snappy_status = snappy_compress(thd_arg->env, (task->file_buffer), task->file_len, compressed_data_buffer, &compressed_len);
+          log_print("\n[LOG]: completed compressing a file for a client\n");
           task->compressed_len = compressed_len;
           task->compressed_buffer = compressed_data_buffer;
         } else {
@@ -667,6 +670,8 @@ static void *improved_work_thread(void *arg) {
         free(task->compressed_buffer);
         free(task->file_buffer);
 
+        log_print("\n[LOG]: completed sending a compressed file back to a client\n");
+
         // TODO: free everything else too
       } else {
         // put back on the queue
@@ -770,6 +775,9 @@ static void *listen_thread(void *arg) {
     //add stuff to task?
 
     db_print("2 deadlocking?????? -------------------------_____________________________________________-------==========\n");
+
+
+    log_print("\n[LOG]: recieved client request, adding to the client request handler queue\n");
     pthread_mutex_lock(&client_q.lock);
     add_to_list(&client_q, node);
     pthread_mutex_unlock(&client_q.lock);
