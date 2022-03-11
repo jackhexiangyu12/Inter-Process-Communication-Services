@@ -7,18 +7,24 @@
 int main(int argc, char *argv[]) {
   printf("this is the client\n");
   print_stuff();
+  if (argc != 3){
+    printf("incorrect number of args\nargs format: <input_file> <compressed_file_name>");
+    return;
+  }
+
 
 
 
   // read in file and put into buffer
   //Create and open file for send
+  char *filename = argv[1];
   unsigned char *buffer;
   unsigned long file_len;
   FILE *file, *file1;
 
   //open the file
-  file = fopen("inputs/Large.txt", "r+");
-  file1 = fopen("compressed", "rw");
+  file = fopen(argv[1], "r+");
+  file1 = fopen(argv[2], "w+");
   if (file == NULL) {
     fprintf(stderr, "Unable to open file %s\n", argv[1]);
     return 1;

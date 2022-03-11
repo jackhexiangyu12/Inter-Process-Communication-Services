@@ -673,7 +673,8 @@ int main(int argc, char* argv[]) {
    */
   int inx;
   if (argc != 5){
-    printf("wrong usage\n");
+    printf("wrong Input usage\nUsage: --n_sms <num_segments> --sms_size <seg_size>");
+    
     return;
   }
 
