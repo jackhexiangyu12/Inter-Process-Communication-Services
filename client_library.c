@@ -21,6 +21,13 @@
 
 #include "include.h"
 
+int db_print(const char *format, ...) {
+  if (DEBUG_PRINT) {
+    va_list args;
+    printf(format, args);
+  }
+}
+
 
 // need procedure that takes in byte array and sync calls the server
 // and then gets stuff in return
@@ -45,7 +52,7 @@ void create_private_q(int q_id) {
 
   char idPath[9];
   sprintf(idPath, "/%d", q_id);
-  printf("client mq path: %s\n", idPath);
+  db_print("client mq path: %s\n", idPath);
 
   mqd_t return_q = mq_open(idPath, O_CREAT | O_RDWR, 0777, &attr);
   close(return_q);
@@ -75,10 +82,10 @@ void establish_communicator_channel(unsigned long file_len, int *get_q_id, int *
 
   int mq_ret = mq_send(main_server_q, buf, len+1, 0);
   if (mq_ret == -1){
-    printf(" messeage que is not working 7\n");
+    db_print(" messeage que is not working 7\n");
 
   }else{
-    printf("Message q is working\n");
+    db_print("Message q is working\n");
   }
 
   mq_close(main_server_q); // dont need this anymore
@@ -88,9 +95,9 @@ void establish_communicator_channel(unsigned long file_len, int *get_q_id, int *
 
 
 void parse_server_message(int **seg_array, char *message_buffer, unsigned long *file_len, int *seg_count, int *seg_size) {
-  /* printf("inside parse server message --------------------------------\n"); */
+  /* db_print("inside parse server message --------------------------------\n"); */
 
-  /* printf("hi 1\n"); */
+  /* db_print("hi 1\n"); */
   int i = 0;
   char seg_size_str[64];
   while (message_buffer[i] != ',') {
@@ -100,7 +107,7 @@ void parse_server_message(int **seg_array, char *message_buffer, unsigned long *
   seg_size_str[i] = '\0';
   *seg_size = atoi(seg_size_str);
 
-  /* printf("seg size: %d\n", *seg_size); */
+  /* db_print("seg size: %d\n", *seg_size); */
   i++; // skip over comma
   char seg_count_str[64];
   int indx = 0;
@@ -114,7 +121,7 @@ void parse_server_message(int **seg_array, char *message_buffer, unsigned long *
 
   *seg_count = atoi(seg_count_str);
 
-  /* printf("seg count: %d\n", *seg_count); */
+  /* db_print("seg count: %d\n", *seg_count); */
 
   char file_len_str[64];
   int flInx = 0;
@@ -132,7 +139,7 @@ void parse_server_message(int **seg_array, char *message_buffer, unsigned long *
 
   /* int *seg_array = (int *) malloc(sizeof(int) * *seg_count); */
   /* int *seg_array = calloc(*seg_count, sizeof(int)); */
-  /* printf("hi 4\n"); */
+  /* db_print("hi 4\n"); */
 
   int counter = 0;
   for (int index = 0; index < *seg_count; index++) {
@@ -147,15 +154,15 @@ void parse_server_message(int **seg_array, char *message_buffer, unsigned long *
     seg_id_str[ind] = '\0';
     i++;
 
-    /* printf("seg count: %d, counter: %d\n", *seg_count, counter); */
-    /* printf("seg id str: %s\n", seg_id_str); */
+    /* db_print("seg count: %d, counter: %d\n", *seg_count, counter); */
+    /* db_print("seg id str: %s\n", seg_id_str); */
 
     (*seg_array)[index] = atoi(seg_id_str);
-    /* printf("array value: %d\n", (*seg_array)[index]); */
+    /* db_print("array value: %d\n", (*seg_array)[index]); */
     counter++;
   }
 
-  /* printf("about to return\n"); */
+  /* db_print("about to return\n"); */
 }
 
 void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_id, int put_q_id) {
@@ -190,7 +197,7 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
   mqd_t put_q = mq_open(putQPath, O_RDWR);
 
 
-  printf("sleeping, then grabbing the prelim message\n");
+  db_print("sleeping, then grabbing the prelim message\n");
   sleep(SLEEP_TIME);
 
   char recv_buff[MAX_MESSAGE_LEN];
@@ -202,11 +209,11 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
   int seg_count = 0;
   int seg_size = 0;
   unsigned long f_len = 0;
-  printf("about to parse this prelim: >>%s<<\n", recv_buff);
-  printf("recv buff message: %s. message len: %lu\n", recv_buff, strlen(recv_buff));
+  db_print("about to parse this prelim: >>%s<<\n", recv_buff);
+  db_print("recv buff message: %s. message len: %lu\n", recv_buff, strlen(recv_buff));
   int *seg_array = calloc(MAX_SEGMENTS_IN_PASS, sizeof(int));
   parse_server_message(&seg_array, recv_buff, &f_len, &seg_count, &seg_size);
-  printf("successful parse\n");
+  db_print("successful parse\n");
 
   // seg_size, seg_array, seg_count
 
@@ -218,7 +225,7 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
 
   int ii = 0;
   while (ii < segments_needed) {
-    printf("in main sender loop, sleeping then waiting for message\n");
+    db_print("in main sender loop, sleeping then waiting for message\n");
     sleep(SLEEP_TIME);
     // blocking call - the server sends one each time data is ready to be accepted
     int stat = mq_receive(get_q, recv_buff, MAX_MESSAGE_LEN, NULL);
@@ -227,7 +234,7 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
     seg_count = 0;
     seg_size = 0;
     parse_server_message(&seg_array, recv_buff, &f_len, &seg_count, &seg_size);
-    printf("successful parse 2 ---------------------   ^^^^\n");
+    db_print("successful parse 2 ---------------------   ^^^^\n");
 
 
 
@@ -255,26 +262,26 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
     struct mq_attr attr;
     mq_getattr(put_q, &attr);
     /* attr.mq_curmsgs */
-    printf("length of q: %ld\n", attr.mq_curmsgs);
-    printf("in main sender loop - sleeping then about to ack server\n");
+    db_print("length of q: %ld\n", attr.mq_curmsgs);
+    db_print("in main sender loop - sleeping then about to ack server\n");
     // is queue full???
 
     /* sleep for 5 seconds before sending ack, for debugging */
     sleep(SLEEP_TIME);
-    printf("finished sleep\n");
+    db_print("finished sleep\n");
 
     stat = mq_send(put_q, "OKs -- good in send", 3, 0); // it seems like the server is never reading this
-    printf("acked --------------------------------------*************\n");
+    db_print("acked --------------------------------------*************\n");
 
     if (stat == -1) {
-        printf(" messeage que is not working idk what num\n");
+        db_print(" messeage que is not working idk what num\n");
 
       } else {
-        printf("Message q is working -- send OK\n");
+        db_print("Message q is working -- send OK\n");
       }
 
     ii += seg_count;
-    printf("end of while loop client send\n");
+    db_print("end of while loop client send\n");
   }
   free(seg_array);
   close(get_q);
@@ -284,14 +291,14 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
 }
 
 void receive_compressed_data(unsigned long *compressed_len, char **comp_data_buffer, int get_q_id, int put_q_id) {
-  printf(":::::::::::::: client side: receive_compressed_data\n");
+  db_print(":::::::::::::: client side: receive_compressed_data\n");
 
   char getQPath[128];
   sprintf(getQPath, "/%d", get_q_id);
   mqd_t get_q = mq_open(getQPath, O_RDWR);
 
   char putQPath[128];
-  sprintf(putQPath, "/%d", put_q_id);
+  db_print(putQPath, "/%d", put_q_id);
   mqd_t put_q = mq_open(putQPath, O_RDWR);
 
 
@@ -299,9 +306,9 @@ void receive_compressed_data(unsigned long *compressed_len, char **comp_data_buf
   // preliminary message has the segment size and the compressed len size
   char recv_buff[MAX_MESSAGE_LEN];
   /* char *recv_buff = calloc(2048, sizeof(char)); // stack smashing detected... */
-  printf("sizeof(recv_buff): %ld\n", sizeof(recv_buff));
+  db_print("sizeof(recv_buff): %ld\n", sizeof(recv_buff));
   int status = mq_receive(get_q, recv_buff, MAX_MESSAGE_LEN, NULL);
-  printf("entire server msg before parsing: >>%s<<\n", recv_buff); // the msg is "OKs" -- wot
+  db_print("entire server msg before parsing: >>%s<<\n", recv_buff); // the msg is "OKs" -- wot
   // sometimes we get lucky and get the actual server message, sometimes we "OKs"
   // I have no idea how or why this happens
 
@@ -313,11 +320,11 @@ void receive_compressed_data(unsigned long *compressed_len, char **comp_data_buf
   int seg_size = 0;
   int *seg_array = calloc(MAX_SEGMENTS_IN_PASS, sizeof(int));
   parse_server_message(&seg_array, recv_buff, compressed_len, &seg_count, &seg_size);
-  printf("successful parse 3\n");
+  db_print("successful parse 3\n");
   // seg_size, seg_array, seg_count
 
-  printf("entire server msg: >>%s<<\n", recv_buff); // the msg is "OK" -- wot
-  printf("info: seg_size: %d\n", seg_size);
+  db_print("entire server msg: >>%s<<\n", recv_buff); // the msg is "OK" -- wot
+  db_print("info: seg_size: %d\n", seg_size);
 
   int segments_needed = (*compressed_len / seg_size); // arithmetic exception??
   if (*compressed_len % seg_size != 0)
@@ -328,14 +335,14 @@ void receive_compressed_data(unsigned long *compressed_len, char **comp_data_buf
   int ii = 0;
   while (ii < segments_needed) {
     // blocking call - the server sends one each time data is ready to be accepted
-    printf("about to main recieve in the recv compressed data part\n");
+    db_print("about to main recieve in the recv compressed data part\n");
     int stat = mq_receive(get_q, recv_buff, MAX_MESSAGE_LEN, NULL);
 
     ///// reparse here
     seg_count = 0;
     seg_size = 0;
     parse_server_message(&seg_array, recv_buff, compressed_len, &seg_count, &seg_size);
-    printf("successful parse 4\n");
+    db_print("successful parse 4\n");
 
 
 
@@ -375,7 +382,7 @@ void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *retu
   mqd_t mq_snd_open = mq_open(MAIN_QUEUE_PATH, O_WRONLY);
   // make shared memory here
 
-  /* printf("virtual address: %d\n", (int) sh_mem); */
+  /* db_print("virtual address: %d\n", (int) sh_mem); */
 
   //char * text = "hello there\n";
 
@@ -410,15 +417,15 @@ void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *retu
 
   sprintf(buf, "%d%lu", randomId, file_len); // id, then stringified segment id
   int len = strlen(buf);
-  printf("the q id: %d\n", randomId);
-  printf("the whole message: %s\n", buf);
+  db_print("the q id: %d\n", randomId);
+  db_print("the whole message: %s\n", buf);
 
   int mq_ret = mq_send(mq_snd_open, buf, len+1, 0);
   if (mq_ret == -1){
-    printf(" messeage que is not working 8\n");
+    db_print(" messeage que is not working 8\n");
 
   }else{
-    printf("Message q is working\n");
+    db_print("Message q is working\n");
   }
 
   // wait for reply with segment id to be used
@@ -459,10 +466,10 @@ char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long 
   establish_communicator_channel(file_len, &get_q_id, &put_q_id);
   /* int mq_ret = mq_send(*private_q, "hello", 6, 0); */
   /* if (mq_ret == -1){ */
-  /*   printf(" messeage que is not working tmp\n"); */
+  /*   db_print(" messeage que is not working tmp\n"); */
 
   /* }else{ */
-  /*   printf("Message q is working\n"); */
+  /*   db_print("Message q is working\n"); */
   /* } */
 
   // now wait for the segment id(s) to come back from the server
@@ -477,14 +484,14 @@ char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long 
 
   // allocate a buffer for the compressed data -- its ok to allocate too much memory
   char *compressed_data_buffer = (char *) malloc(file_len);
-  printf("sleeping, then moving to the next phase--\n");
+  db_print("sleeping, then moving to the next phase--\n");
   /* sleep(100); */
 
   // we dont need threads for sync mode
   receive_compressed_data(compressed_len, &compressed_data_buffer, get_q_id, put_q_id);
 
   // now destroy the message queue that was used to get the compressed file back
-  printf("about to close and destroy the client Qs\n");
+  db_print("about to close and destroy the client Qs\n");
   char idPath[9];
   sprintf(idPath, "/%d", get_q_id);
   mq_unlink(idPath);
@@ -505,5 +512,5 @@ char * async_compress(unsigned char *data, unsigned long file_len, unsigned long
 }
 
 void print_stuff() {
-  printf("this is stuff\n");
+  db_print("this is stuff\n");
 }

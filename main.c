@@ -106,7 +106,7 @@ int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
 
 
 
-  printf("about to grab segments here::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;\n");
+  db_print("about to grab segments here::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::;\n");
   while ((mem_info.seg_count - mem_info.used_seg_count) == 0) {
     // if the system has NO free segments, need to wait for some time
     //  yield the thread manually?
@@ -116,7 +116,7 @@ int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
     pthread_mutex_lock(&mem_info.lock);
     // TODO: actually implement this function properly without deadlocks
   }
-  printf("found segments to grab\n");
+  db_print("found segments to grab\n");
 
 
   // now to implement
@@ -152,7 +152,7 @@ int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
 }
 
 void prep_segment_avail_metadata_msg(char *message_buffer, unsigned long file_len, int segments_available_count, seg_data_t ***available_segments) {
-  printf("pre prep message:: file_len: %lu, segs available (arr len): %d\n", file_len, segments_available_count);
+  db_print("pre prep message:: file_len: %lu, segs available (arr len): %d\n", file_len, segments_available_count);
 
 
   sprintf(message_buffer, "%d,%d,%lu,", mem_info.seg_size, segments_available_count, file_len);
@@ -173,7 +173,7 @@ void *improved_check_clientq() {
     // need to handle an ENTIRE client file tranfer from client to server here
 
     // first pop the client task queue
-    /* printf("3 possible deadlock here idk ------------- ^^^^^^^^^^^^^^^^^^^^^          ==================\n"); */
+    /* db_printf("3 possible deadlock here idk ------------- ^^^^^^^^^^^^^^^^^^^^^          ==================\n"); */
     pthread_mutex_lock(&client_q.lock);
 
     if (queue_size(&client_q) <= 0) {
@@ -183,11 +183,11 @@ void *improved_check_clientq() {
 
     task_node *curr_client = remove_head(&client_q);
     pthread_mutex_unlock(&client_q.lock);
-    printf("3 i guess no deadlock here or whatever\n");
+    db_print("3 i guess no deadlock here or whatever\n");
     if (curr_client == NULL)
       /* sched_yield(); // helpful?  */
       continue;
-    printf("running a client task\n");
+    db_print("running a client task\n");
 
     // then need to grab the max amount of segments that we are allotted, but only enough for the file
 
@@ -196,21 +196,21 @@ void *improved_check_clientq() {
 
     pthread_mutex_lock(&mem_info.lock);
     // the grab segments line itself is segfaulting??
-    printf("gunna seg fault again...\n");
+    db_print("gunna seg fault again...\n");
     /* seg_data_t ***tempvar = &available_segments; */
-    /* printf("gunna seg fault again merp... %d\n", tempvar); */
-    printf("about to compress and also print client q len !!@@\n");
+    /* db_print("gunna seg fault again merp... %d\n", tempvar); */
+    db_print("about to compress and also print client q len !!@@\n");
 
 
-    printf("client q len: %d\n", client_q.size);
-    printf("uhhh some stuff  %d\n", curr_client->client);
+    db_print("client q len: %d\n", client_q.size);
+    db_print("uhhh some stuff  %d\n", curr_client->client);
 
 
 
     // the client list is being very wierd -- it shouldnt really be growing the way it is
 
     unsigned long thingy = curr_client->client->file_len;
-    printf("gunna seg fault again derp...%lu\n", thingy); // this is the culprit
+    db_print("gunna seg fault again derp...%lu\n", thingy); // this is the culprit
     int available_segment_count = grab_segments(&available_segments, curr_client->client->file_len);
     pthread_mutex_unlock(&mem_info.lock);
 
@@ -235,14 +235,14 @@ void *improved_check_clientq() {
     sprintf(putQPath, "/%d", curr_client->client->put_queue_id);
     mqd_t client_mq_put = mq_open(putQPath, O_RDWR);
 
-    printf("both q ids: %d %d\n", curr_client->client->get_queue_id, curr_client->client->put_queue_id);
+    db_print("both q ids: %d %d\n", curr_client->client->get_queue_id, curr_client->client->put_queue_id);
 
 
     // send the preliminary data message to client, then send the availability message
 
-    printf("prepped message: %s\n", message_buffer);
-    printf("client mq get path: %s\n", getQPath);
-    printf("client mq put path: %s\n", putQPath);
+    db_print("prepped message: %s\n", message_buffer);
+    db_print("client mq get path: %s\n", getQPath);
+    db_print("client mq put path: %s\n", putQPath);
     sleep(SLEEP_TIME);
 
 
@@ -251,14 +251,14 @@ void *improved_check_clientq() {
       int ret_stat = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
 
       if (ret_stat == -1) {
-        printf(" messeage que is not working 1\n"); // emsgsize error
+        db_print(" messeage que is not working 1\n"); // emsgsize error
         // msg_len was greater than the mq_msgsize attribute of the message queue
         int err = errno;
-        printf("error codea: %d\n", err); // got 90
+        db_print("error codea: %d\n", err); // got 90
         print_error(err);
 
       } else {
-        printf("successfully sent a preliminary client q message\n");
+        db_print("successfully sent a preliminary client q message\n");
       }
 
 
@@ -268,7 +268,7 @@ void *improved_check_clientq() {
 
       curr_client->client->file_buffer = file_buffer;
 
-      printf("allocated file buffer\n");
+      db_print("allocated file buffer\n");
       int segments_needed = (curr_client->client->file_len / mem_info.seg_size);
       if (curr_client->client->file_len % mem_info.seg_size != 0)
         segments_needed++;
@@ -287,27 +287,27 @@ void *improved_check_clientq() {
 
     // now do the actual main send and recv
 
-    printf("in clientq handler main part - sleeping then sending message\n");
+    db_print("in clientq handler main part - sleeping then sending message\n");
     sleep(SLEEP_TIME);
     int ret_status = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
 
     if (ret_status == -1) {
-      printf(" messeage que is not working 2\n");
+      db_print(" messeage que is not working 2\n");
 
     } else {
-      printf("successfully sent a normal client q message\n");
+      db_print("successfully sent a normal client q message\n");
     }
 
     // NOTE: this server thread works with the client library func send_data_to_server
 
     // after sending data to the client, wait for client to say its done packing the data
     // basically we are listening for an ACK -- dont verify the content bc i dont care about error checking
-    printf("about to listen for client ACK\n");
+    db_print("about to listen for client ACK\n");
 
 
     // getting stuck here
-    printf("client put queue id: %s\n", putQPath);
-    printf("client get queue id: %s\n", getQPath);
+    db_print("client put queue id: %s\n", putQPath);
+    db_print("client get queue id: %s\n", getQPath);
 
 
 
@@ -315,15 +315,15 @@ void *improved_check_clientq() {
     char tmp[MAX_MESSAGE_LEN];
 
     ret_status = mq_receive(client_mq_put, tmp, MAX_MESSAGE_LEN, 0);
-    printf("ACK?: %s\n", tmp); // the ack is being read incorrectly
+    db_print("ACK?: %s\n", tmp); // the ack is being read incorrectly
     // TODO: error handling? dont assume the message is "OK" ?
     if (ret_status == -1) {
-      printf(" messeage que is not working 3\n");
+      db_print(" messeage que is not working 3\n");
       int err = errno;
-      printf("error codee: %d\n", err);
+      db_print("error codee: %d\n", err);
 
     } else {
-      printf("Message q is working\n");
+      db_print("Message q is working\n");
     }
 
     // loop thru the segments that are allocated
@@ -343,13 +343,13 @@ void *improved_check_clientq() {
       if (curr_client->client->segments_remaining == 0) {
         int len = curr_client->client->file_len - offset;
         // TODO: I really hope i dereffed this properly
-        printf("about to segfault 1\n");
+        db_print("about to segfault 1\n");
         memcpy(((curr_client->client->file_buffer)) + (offset), sh_mem, len);
       } else {
-        printf("about to segfault 2                            ---------------------------------------\n");
+        db_print("about to segfault 2                            ---------------------------------------\n");
         // segfaults on the first round -- but whyyyyyyyyy
         memcpy(((curr_client->client->file_buffer)) + (offset), sh_mem, mem_info.seg_size);
-        printf("finished normal send copy\n");
+        db_print("finished normal send copy\n");
       }
       // original:
       /* memcpy(file_buffer + ((j + i) * mem_info.seg_size), sh_mem, mem_info.seg_size); */
@@ -357,7 +357,7 @@ void *improved_check_clientq() {
       // TODO: i really hope this is right ^^
     }
 
-    printf("finished send for loop thingy\n");
+    db_print("finished send for loop thingy\n");
 
     /* for (int i = 0; i < segments_needed; i += available_segment_count) { } */
 
@@ -372,7 +372,7 @@ void *improved_check_clientq() {
     curr_client->client->segment_index += available_segment_count;
 
     if (curr_client->client->segment_index >= curr_client->client->total_segments_needed) {
-      printf("cleaning up a complete send\n");
+      db_print("cleaning up a complete send\n");
       // then we are complete
       curr_client->client->is_done = 1;
 
@@ -404,20 +404,20 @@ void *improved_check_clientq() {
       /* free(curr_client); */
       /* free(curr_client->client); // idk if this is safe*/
     } else {
-      printf("another round of send\n"); // blocking here
+      db_print("another round of send\n"); // blocking here
 
       curr_client->client->fresh = 0; // very very important
 
-      printf("1 probably about to deadlock ------------------------------------------------------=================               __________________-----\n");
+      db_print("1 probably about to deadlock ------------------------------------------------------=================               __________________-----\n");
       // put back on the client queue
       pthread_mutex_lock(&client_q.lock);
-      printf("magically aqured the lock\n");
+      db_print("magically aqured the lock\n");
       add_to_list(&client_q, curr_client);
-      printf("can i get uhhhh\n");
+      db_print("can i get uhhhh\n");
       pthread_mutex_unlock(&client_q.lock);
 
 
-      printf("1 did add to list for send --- no deadlock\n");
+      db_print("1 did add to list for send --- no deadlock\n");
     }
 
 
@@ -426,7 +426,7 @@ void *improved_check_clientq() {
 
     // TODO: free the node and the task object -- i think i covered that
 
-    printf("about to release the segments\n");
+    db_print("about to release the segments\n");
     release_segments(available_segment_count, &available_segments);
     free(available_segments);
   }
@@ -439,20 +439,20 @@ static void *improved_work_thread(void *arg) {
   workthread_arg_t *thd_arg = (workthread_arg_t *) arg;
 
   pthread_mutex_lock(&client_q.lock);
-  printf("client q len %d\n", client_q.size);
+  db_print("client q len %d\n", client_q.size);
   pthread_mutex_unlock(&client_q.lock);
 
   pthread_mutex_lock(&task_q.lock);
-  printf("task q len %d\n", task_q.size);
+  db_print("task q len %d\n", task_q.size);
   pthread_mutex_unlock(&task_q.lock);
 
   // the queues are the correct lens, 0 and 1
 
-  printf("sleepy time before starting work\n");
+  db_print("sleepy time before starting work\n");
   while (1) {
     pthread_mutex_lock(&task_q.lock);
     if (queue_size(&task_q) > 0) {
-      printf("got a compression task -----------------------------------------------------------------------------------------------------------------------\n");
+      db_print("got a compression task -----------------------------------------------------------------------------------------------------------------------\n");
       // then do stuff
       task_node *current_task = remove_head(&task_q);
       pthread_mutex_unlock(&task_q.lock);
@@ -467,7 +467,7 @@ static void *improved_work_thread(void *arg) {
       if (task->fresh) {
         /* sleep(10); */
 
-        /* printf("task info:  file len: %lu\n", current_task->task->file_len); */
+        /* db_print("task info:  file len: %lu\n", current_task->task->file_len); */
 
 
         // then need to set up attributes and send preliminary message
@@ -479,9 +479,9 @@ static void *improved_work_thread(void *arg) {
 
         if (DO_COMPRESSION) {
           /* pthread_mutex_lock(&client_q.lock); */
-          printf("about to compress and also print client q len\n\n\n\n\n\n\n\n\n\n\n&&%%");
+          db_print("about to compress and also print client q len\n\n\n\n\n\n\n\n\n\n\n&&%%");
 
-          printf("client q len (sleepy again): %d\n", client_q.size);
+          db_print("client q len (sleepy again): %d\n", client_q.size);
           /* pthread_mutex_unlock(&client_q.lock); */
           int snappy_status = snappy_compress(thd_arg->env, (task->file_buffer), task->file_len, compressed_data_buffer, &compressed_len);
           task->compressed_len = compressed_len;
@@ -553,14 +553,14 @@ static void *improved_work_thread(void *arg) {
 
       if (task->fresh) {
         // need to send preliminary message
-        printf("about to send this message in work thread: %s\n", message_buffer);
+        db_print("about to send this message in work thread: %s\n", message_buffer);
         int ret_status = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
 
         if (ret_status == -1) {
-          printf(" messeage que is not working 4.1?\n");
+          db_print(" messeage que is not working 4.1?\n");
 
         } else {
-          printf("Message q is working -- sent work thread prelim\n");
+          db_print("Message q is working -- sent work thread prelim\n");
         }
 
       }
@@ -583,13 +583,13 @@ static void *improved_work_thread(void *arg) {
         int offset = (j + task->segment_index) * mem_info.seg_size;
         if (task->segments_remaining == 0) {
           int len = task->compressed_len - offset;
-          printf("bruh 1\n");
-          printf("j: %d, seg index: %d, seg size: %d, seg id in use: %d, offset: %d, segments_remaining: %d, total segments needed %d\n", j, task->segment_index, mem_info.seg_size, segment_id, offset, task->segments_remaining, task->total_segments_needed);
+          db_print("bruh 1\n");
+          db_print("j: %d, seg index: %d, seg size: %d, seg id in use: %d, offset: %d, segments_remaining: %d, total segments needed %d\n", j, task->segment_index, mem_info.seg_size, segment_id, offset, task->segments_remaining, task->total_segments_needed);
           // get compressed buffer size
 
-          printf("compressed len: %lu\n", task->compressed_len);
-          printf("shmat return value: %d\n", sh_mem);
-          printf("size of a char %d\n", sizeof(char));
+          db_print("compressed len: %lu\n", task->compressed_len);
+          db_print("shmat return value: %d\n", sh_mem);
+          db_print("size of a char %d\n", sizeof(char));
           char *dummy_buffer = (char *) malloc(sizeof(char) * (task->file_len));
 
 
@@ -598,24 +598,24 @@ static void *improved_work_thread(void *arg) {
 
           free(dummy_buffer);
         } else {
-          printf("bruh 2\n");
+          db_print("bruh 2\n");
 
-          printf("j: %d, seg index: %d, seg size: %d, seg id in use: %d, offset: %d, segments_remaining: %d, total segments needed %d\n", j, task->segment_index, mem_info.seg_size, segment_id, offset, task->segments_remaining, task->total_segments_needed);
+          db_print("j: %d, seg index: %d, seg size: %d, seg id in use: %d, offset: %d, segments_remaining: %d, total segments needed %d\n", j, task->segment_index, mem_info.seg_size, segment_id, offset, task->segments_remaining, task->total_segments_needed);
           // get compressed buffer size
 
-          printf("compressed len: %lu\n", task->compressed_len);
-          printf("shmat return value: %d\n", sh_mem); // its -1, which means error
+          db_print("compressed len: %lu\n", task->compressed_len);
+          db_print("shmat return value: %d\n", sh_mem); // its -1, which means error
           char tbuf[64];
           sprintf(tbuf, "%d", sh_mem);
           int shmem_num = atoi(tbuf);
-          printf("%s\n",tbuf);
+          db_print("%s\n",tbuf);
           int flip_flop = 0;
           if (shmem_num == -1) {
-            printf("got shmem error\n");
+            db_print("got shmem error\n");
             int err = errno;
             print_error(err);
           }
-          printf("size of a char %d\n", sizeof(char));
+          db_print("size of a char %d\n", sizeof(char));
           char *dummy_buffer = (char *) malloc(sizeof(char) * (task->file_len));
 
           memcpy(sh_mem, (task->compressed_buffer) + (offset), mem_info.seg_size);
@@ -632,10 +632,10 @@ static void *improved_work_thread(void *arg) {
       int ret_status = mq_send(client_mq_get, message_buffer, strlen(message_buffer) + 1, 0);
 
       if (ret_status == -1) {
-        printf(" messeage que is not working 4\n");
+        db_print(" messeage que is not working 4\n");
 
       } else {
-        printf("Message q is working -- sent work thread main msg\n");
+        db_print("Message q is working -- sent work thread main msg\n");
       }
 
       // now wait for an ACK from the client -- no error handling implemented
@@ -644,12 +644,12 @@ static void *improved_work_thread(void *arg) {
       ret_status = mq_receive(client_mq_put, tmp, MAX_MESSAGE_LEN, 0);
       // TODO: error handling? dont assume the message is "OK" ?
       if (ret_status == -1) {
-        printf(" messeage que is not working 5\n");
+        db_print(" messeage que is not working 5\n");
         int err = errno;
-        printf("error codef: %d\n", err);
+        db_print("error codef: %d\n", err);
         print_error(err);
       } else {
-        printf("Message q is working - recv 5\n");
+        db_print("Message q is working - recv 5\n");
       }
 
 
@@ -722,10 +722,10 @@ static void *listen_thread(void *arg) {
     int mq_ret = mq_receive(thread_arg->main_q, recieve_buffer, sizeof(recieve_buffer), NULL);
 
     if (mq_ret == -1) {
-      printf(" messeage que is not working 6\n");
+      db_print(" messeage que is not working 6\n");
 
     } else {
-      printf("Message q is working - got message in the listen thread\n");
+      db_print("Message q is working - got message in the listen thread\n");
     }
 
     // add to the client queue
@@ -760,7 +760,7 @@ static void *listen_thread(void *arg) {
     task->put_queue_id = atoi(putQId);
     task->file_len = file_len;
     task->fresh = 1; // very very important
-    printf("initally parsed file len: %lu\n", file_len);
+    db_print("initally parsed file len: %lu\n", file_len);
 
 
     node->client = task;
@@ -769,11 +769,11 @@ static void *listen_thread(void *arg) {
     //TODO:
     //add stuff to task?
 
-    printf("2 deadlocking?????? -------------------------_____________________________________________-------==========\n");
+    db_print("2 deadlocking?????? -------------------------_____________________________________________-------==========\n");
     pthread_mutex_lock(&client_q.lock);
     add_to_list(&client_q, node);
     pthread_mutex_unlock(&client_q.lock);
-    printf("2 I guess no deadlocking\n");
+    db_print("2 I guess no deadlocking\n");
 
 
 
@@ -800,7 +800,7 @@ int main(int argc, char* argv[]) {
    */
   int inx;
   if (argc != 5){
-    printf("wrong Input usage\nUsage: --n_sms <num_segments> --sms_size <seg_size>");
+    db_print("wrong Input usage\nUsage: --n_sms <num_segments> --sms_size <seg_size>");
 
     return;
   }
@@ -813,16 +813,16 @@ int main(int argc, char* argv[]) {
 
   mem_info.seg_count = *segment_count;
   mem_info.seg_size = *segment_size_in_bytes;
-  printf("segment size: %d", mem_info.seg_size);
+  db_print("segment size: %d", mem_info.seg_size);
 
   if (pthread_mutex_init(&mem_info.lock, NULL) != 0) {
-    printf("mutex init fail\n");
+    db_print("mutex init fail\n");
     return 1;
   }
 
   mem_info.data_array = malloc(sizeof(seg_data_t) * (*segment_count));
   if (mem_info.data_array == NULL) {
-    printf("out of mem\n");
+    db_print("out of mem\n");
     return 1;
   }
 
@@ -835,12 +835,12 @@ int main(int argc, char* argv[]) {
 
 
   if (pthread_mutex_init(&task_q.lock, NULL) != 0) {
-    printf("mutex init fail\n");
+    db_print("mutex init fail\n");
     return 1;
   }
 
   if (pthread_mutex_init(&client_q.lock, NULL) != 0) {
-    printf("mutex init fail\n");
+    db_print("mutex init fail\n");
     return 1;
   }
 
@@ -852,7 +852,7 @@ int main(int argc, char* argv[]) {
 
   mqd_t setup_result = setup_main_q();
   if (setup_result == -1) {
-    printf("couldnt make the q\n");
+    db_print("couldnt make the q\n");
     return 1;
   }
 
@@ -861,14 +861,14 @@ int main(int argc, char* argv[]) {
   workthread_arg_t * wthread_arg = malloc(sizeof(workthread_arg_t));
   if (wthread_arg == NULL) {
     // out of memory
-    printf("out of mem\n");
+    db_print("out of mem\n");
     return 1;
   }
 
   thread_arg_t * lthread_arg = malloc(sizeof(thread_arg_t));
   if (lthread_arg == NULL) {
     // out of memory
-    printf("out of mem\n");
+    db_print("out of mem\n");
     return 1;
   }
 

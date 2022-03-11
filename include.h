@@ -17,6 +17,7 @@
 
 #define DO_COMPRESSION (1)
 
+#define DEBUG_PRINT (0)
 
 #define DEBUG_WORK_MODE (0)
 
