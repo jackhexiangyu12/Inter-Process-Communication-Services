@@ -6,5 +6,5 @@ int db_print(const char *format, ...); // for debug mode
 
 int log_print(const char *format, ...); // for log mode
 
-char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len);
-char * async_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len);
+char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len, int client_id);
+char * async_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len, int client_id);

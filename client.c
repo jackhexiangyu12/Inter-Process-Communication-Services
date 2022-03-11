@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <unistd.h>
 #include "client_library.h"
 
 #include "snappy.h"
@@ -15,7 +16,7 @@ typedef struct async_arg{
 int flag = 0;
 void *async( void *async_data){
   async_arg_t *data = (async_arg_t*)async_data;
-  data->compressed_file_buffer = sync_compress(data->buffer, data->file_len, &data->compressed_len);
+  data->compressed_file_buffer = sync_compress(data->buffer, data->file_len, &data->compressed_len, getpid());
   flag = 1;
 }
 
@@ -70,7 +71,7 @@ int call_compress( FILE **file1, int is_async, char *filename, int len_ ){
     //printf("This is printing before the program completion\n");
   }else{
     flag = 1;
-    compressed_file_buffer = sync_compress(buffer, file_len, &compressed_len);
+    compressed_file_buffer = sync_compress(buffer, file_len, &compressed_len, getpid());
   }
 
   //Testing async call

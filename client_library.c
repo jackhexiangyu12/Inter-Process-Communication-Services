@@ -66,7 +66,7 @@ void create_private_q(int q_id) {
   close(return_q);
 }
 
-void establish_communicator_channel(unsigned long file_len, int *get_q_id, int *put_q_id) {
+void establish_communicator_channel(unsigned long file_len, int *get_q_id, int *put_q_id, int client_id) {
   // need 2 communicator channels for this to be fully duplex
 
 
@@ -85,7 +85,7 @@ void establish_communicator_channel(unsigned long file_len, int *get_q_id, int *
   mqd_t main_server_q = mq_open(MAIN_QUEUE_PATH, O_WRONLY);
 
   char buf[2048];
-  sprintf(buf, "%d%d%lu:", *get_q_id, *put_q_id, file_len); // trailing colon bc look at the parser in the server
+  sprintf(buf, "%d%d%lu:%d:", *get_q_id, *put_q_id, file_len, client_id); // trailing colon bc look at the parser in the server
   int len = strlen(buf);
 
   int mq_ret = mq_send(main_server_q, buf, len+1, 0);
@@ -446,7 +446,7 @@ void send_original_file(unsigned char *data, unsigned long file_len, mqd_t *retu
 struct timeval cst_start;
 struct timeval cst_end;
 
-char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len) {
+char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len, int client_id) {
 
 
   gettimeofday(&cst_start, NULL);
@@ -479,7 +479,7 @@ char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long 
   // TODO: check for null
   int get_q_id = 0;
   int put_q_id = 0;
-  establish_communicator_channel(file_len, &get_q_id, &put_q_id);
+  establish_communicator_channel(file_len, &get_q_id, &put_q_id, client_id);
   log_print("[LOG]: just created 2 private queues and sent inital request to server to be serviced\n");
   /* int mq_ret = mq_send(*private_q, "hello", 6, 0); */
   /* if (mq_ret == -1){ */
@@ -538,7 +538,7 @@ char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long 
 }
 
 
-char * async_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len) {
+char * async_compress(unsigned char *data, unsigned long file_len, unsigned long *compressed_len, int client_id) {
   // TODO:
   return NULL;
 }

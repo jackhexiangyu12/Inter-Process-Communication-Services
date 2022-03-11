@@ -32,8 +32,7 @@ typedef struct workthread_arg {
 
 shared_memory_info mem_info;
 
-object_q task_q;
-object_q client_q;
+meta_q_t meta_q;
 
 
 mqd_t setup_main_q() {
@@ -198,17 +197,28 @@ void *improved_check_clientq() {
 
     // first pop the client task queue
     /* db_printf("3 possible deadlock here idk ------------- ^^^^^^^^^^^^^^^^^^^^^          ==================\n"); */
-    pthread_mutex_lock(&client_q.lock);
+    pthread_mutex_lock(&meta_q.lock);
 
-    if (queue_size(&client_q) <= 0) {
-      pthread_mutex_unlock(&client_q.lock);
+    if (meta_q.size <= 0) {
+      pthread_mutex_unlock(&meta_q.lock);
       continue;
     }
 
-    task_node *curr_client = remove_head(&client_q);
-    pthread_mutex_unlock(&client_q.lock);
+    // otherwise grab a new meta node
+    meta_q_node_t *current_client_meta_node = get_next_client_node(&meta_q);
+
+    pthread_mutex_unlock(&meta_q.lock);
+
+    // lock the client_q
+    pthread_mutex_lock(&current_client_meta_node->client_q->lock);
+
+    // grab the head of this queue
+    task_node *curr_client = remove_head(current_client_meta_node->client_q);
+
+    pthread_mutex_unlock(&current_client_meta_node->client_q->lock);
+
     db_print("3 i guess no deadlock here or whatever\n");
-    if (curr_client == NULL)
+    if (curr_client == NULL) // skip over a client that is empty
       /* sched_yield(); // helpful?  */
       continue;
     db_print("running a client task\n");
@@ -226,7 +236,6 @@ void *improved_check_clientq() {
     db_print("about to compress and also print client q len !!@@\n");
 
 
-    db_print("client q len: %d\n", client_q.size);
     db_print("uhhh some stuff  %d\n", curr_client->client);
 
 
@@ -423,25 +432,59 @@ void *improved_check_clientq() {
 
       log_print("\n[LOG]: completed recieving an entire file from a client, now placing task into compression task queue\n");
 
-      pthread_mutex_lock(&task_q.lock);
-      add_to_list(&task_q, comp_node);
-      pthread_mutex_unlock(&task_q.lock);
+
+
+      // create a task queue for this client's meta node
+
+      pthread_mutex_lock(&current_client_meta_node->lock);
+
+
+
+      // allocate a new task queue -- already have the node that will go onto it
+
+      object_q *task_q = (object_q *) malloc(sizeof(object_q));
+
+      if (pthread_mutex_init(&(task_q->lock), NULL) != 0) {
+        printf("mutex init fail\n");
+        while (1) {}
+      }
+
+      task_q->list_head = comp_node;
+      comp_node->next = comp_node; // make circular -- very important
+      task_q->size = 1;
+
+      current_client_meta_node->task_q = task_q;
+      // should already have the pid on the meta node
+
+      // the meta node should already be in the meta queue
+
+      // unlock the meta node
+      pthread_mutex_lock(&current_client_meta_node->lock);
+
+
+      /* pthread_mutex_lock(&task_q.lock); */
+      /* add_to_list(&task_q, comp_node); */
+      /* pthread_mutex_unlock(&task_q.lock); */
 
 
       /* free(curr_client); */
       /* free(curr_client->client); // idk if this is safe*/
     } else {
+      // put back onto the client queue
+
       db_print("another round of send\n"); // blocking here
 
       curr_client->client->fresh = 0; // very very important
 
       db_print("1 probably about to deadlock ------------------------------------------------------=================               __________________-----\n");
       // put back on the client queue
-      pthread_mutex_lock(&client_q.lock);
-      db_print("magically aqured the lock\n");
-      add_to_list(&client_q, curr_client);
-      db_print("can i get uhhhh\n");
-      pthread_mutex_unlock(&client_q.lock);
+      pthread_mutex_lock(&current_client_meta_node->client_q->lock);
+
+
+      add_to_list(current_client_meta_node->client_q, curr_client);
+
+
+      pthread_mutex_unlock(&current_client_meta_node->client_q->lock);
 
 
       db_print("1 did add to list for send --- no deadlock\n");
@@ -465,26 +508,49 @@ static void *improved_work_thread(void *arg) {
 
   workthread_arg_t *thd_arg = (workthread_arg_t *) arg;
 
-  pthread_mutex_lock(&client_q.lock);
-  db_print("client q len %d\n", client_q.size);
-  pthread_mutex_unlock(&client_q.lock);
+  /* pthread_mutex_lock(&client_q.lock); */
+  /* db_print("client q len %d\n", client_q.size); */
+  /* pthread_mutex_unlock(&client_q.lock); */
 
-  pthread_mutex_lock(&task_q.lock);
-  db_print("task q len %d\n", task_q.size);
-  pthread_mutex_unlock(&task_q.lock);
+  /* pthread_mutex_lock(&task_q.lock); */
+  /* db_print("task q len %d\n", task_q.size); */
+  /* pthread_mutex_unlock(&task_q.lock); */
 
   // the queues are the correct lens, 0 and 1
 
-  db_print("sleepy time before starting work\n");
   while (1) {
-    pthread_mutex_lock(&task_q.lock);
-    if (queue_size(&task_q) > 0) {
+    pthread_mutex_lock(&meta_q.lock);
+    if (meta_q.size > 0) {
       db_print("got a compression task -----------------------------------------------------------------------------------------------------------------------\n");
       // then do stuff
-      task_node *current_task = remove_head(&task_q);
-      pthread_mutex_unlock(&task_q.lock);
 
-      ctask *task = current_task->task; // does this copy into stack memory??
+      // find the next client
+      meta_q_node_t *current_client_meta_node = get_next_client_node(&meta_q);
+      pthread_mutex_unlock(&meta_q.lock);
+
+      // now lock the task queue -- if it exists
+
+
+      if (current_client_meta_node->task_q == NULL) {
+        // then skip
+        continue;
+      }
+
+
+      pthread_mutex_lock(&current_client_meta_node->task_q->lock);
+
+      if (current_client_meta_node->task_q->size == 0) {
+        pthread_mutex_unlock(&current_client_meta_node->task_q->lock);
+        continue;
+      }
+
+      // grab the head of this queue
+      task_node *current_task = remove_head(current_client_meta_node->task_q);
+
+
+      pthread_mutex_unlock(&current_client_meta_node->task_q->lock);
+
+      ctask *task = current_task->task; // does this copy into stack memory?? -- narp? --whatever it works
 
       /* // read the data from the segment */
       /* int segment_id = task->segment_id; */
@@ -508,7 +574,6 @@ static void *improved_work_thread(void *arg) {
           /* pthread_mutex_lock(&client_q.lock); */
           db_print("about to compress and also print client q len\n\n\n\n\n\n\n\n\n\n\n&&%%");
 
-          db_print("client q len (sleepy again): %d\n", client_q.size);
           /* pthread_mutex_unlock(&client_q.lock); */
           int snappy_status = snappy_compress(thd_arg->env, (task->file_buffer), task->file_len, compressed_data_buffer, &compressed_len);
           log_print("\n[LOG]: completed compressing a file for a client\n");
@@ -700,14 +765,19 @@ static void *improved_work_thread(void *arg) {
 
         // TODO: free everything else too
       } else {
-        // put back on the queue
+        // put back on the task queue for the current node thingy
         task->fresh = 0; // very very important
 
         // TODO: anything else to handle????
 
-        pthread_mutex_lock(&task_q.lock);
-        add_to_list(&task_q, current_task);
-        pthread_mutex_unlock(&task_q.lock);
+
+        pthread_mutex_lock(&current_client_meta_node->task_q->lock);
+
+
+        add_to_list(current_client_meta_node->task_q, current_task);
+
+
+        pthread_mutex_unlock(&current_client_meta_node->task_q->lock);
       }
 
 
@@ -718,7 +788,7 @@ static void *improved_work_thread(void *arg) {
       free(available_segments);
 
     } else {
-      pthread_mutex_unlock(&task_q.lock);
+      pthread_mutex_unlock(&meta_q.lock);
     }
   }
 
@@ -783,6 +853,20 @@ static void *listen_thread(void *arg) {
     char **f;
     unsigned long file_len = strtoul(dataLenBuffer, f, 10);
 
+    i++;
+
+    char clientIdBuffer[64];
+    int k = 0;
+    while (recieve_buffer[i] != ':') {
+      clientIdBuffer[k] = recieve_buffer[i];
+      i++;
+      k++;
+    }
+    clientIdBuffer[k] = '\0';
+
+    int client_id = atoi(clientIdBuffer);
+
+
     task_node *node = (task_node *) malloc(sizeof(task_node));
     cltask *task = (cltask *) malloc(sizeof(cltask));
 
@@ -803,11 +887,66 @@ static void *listen_thread(void *arg) {
     db_print("2 deadlocking?????? -------------------------_____________________________________________-------==========\n");
 
 
-    log_print("\n[LOG]: recieved client request, adding to the client request handler queue\n");
-    pthread_mutex_lock(&client_q.lock);
-    add_to_list(&client_q, node);
-    pthread_mutex_unlock(&client_q.lock);
-    db_print("2 I guess no deadlocking\n");
+
+    // before adding the task to any queues, need to do meta_q stuff
+
+    pthread_mutex_lock(&meta_q.lock);
+
+    // check metaq for this client
+
+    meta_q_node_t *found_client = find_client_node(&meta_q, client_id);
+
+    if (found_client == NULL) {
+      // then stuff
+
+      // add new client object to the meta q -- will be the only object in it
+      found_client = (meta_q_node_t *) malloc(sizeof(meta_q_node_t));
+      // initalize the lock for this client node
+
+      if (pthread_mutex_init(&found_client->lock, NULL) != 0) { // we dont need this lock??
+        printf("mutex init fail\n");
+        while (1) {}
+      }
+
+      /* pthread_mutex_lock(&found_client->lock); // dont need until added to the meta q */
+
+      // initalize the client q for this meta node
+
+      object_q *client_q = (object_q *) malloc(sizeof(object_q));
+
+      if (pthread_mutex_init(&(client_q->lock), NULL) != 0) {
+        printf("mutex init fail\n");
+        while (1) {}
+      }
+
+      client_q->list_head = node;
+      node->next = node; // circular -- important
+
+      client_q->size = 1; // important
+
+
+      found_client->client_q = client_q;
+      found_client->pid = client_id; // extremely important
+
+
+      // this will take care of the next pointer stuffs and meta q size
+      add_to_meta_q(&meta_q, found_client);
+
+
+      pthread_mutex_unlock(&meta_q.lock);
+
+
+    } else {
+      // the client already exists
+
+      // lock that client's queue
+      pthread_mutex_lock(&(found_client->client_q->lock));
+
+      add_to_list(found_client->client_q, node);
+
+      pthread_mutex_unlock(&(found_client->client_q->lock));
+
+    }
 
 
 
@@ -868,20 +1007,13 @@ int main(int argc, char* argv[]) {
   }
 
 
-  if (pthread_mutex_init(&task_q.lock, NULL) != 0) {
+  if (pthread_mutex_init(&meta_q.lock, NULL) != 0) {
     db_print("mutex init fail\n");
     return 1;
   }
 
-  if (pthread_mutex_init(&client_q.lock, NULL) != 0) {
-    db_print("mutex init fail\n");
-    return 1;
-  }
-
-  client_q.list_head = NULL;
-  client_q.size = 0;
-  task_q.list_head = NULL;
-  task_q.size = 0;
+  meta_q.size = 0;
+  meta_q.list_head = NULL;
 
 
   mqd_t setup_result = setup_main_q();

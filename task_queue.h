@@ -49,8 +49,34 @@ typedef struct __active_queue {
 } object_q;
 
 
+typedef struct __meta_q_node {
+  int pid;
+  object_q *client_q;
+  object_q *task_q;
+
+  struct __meta_q_node *next;
+
+  pthread_mutex_t lock; // dont forget to init the lock
+} meta_q_node_t;
+
+
+typedef struct __meta_q {
+  pthread_mutex_t lock;
+  int size; // dont forget to increment and decrement
+  meta_q_node_t *list_head;
+
+} meta_q_t;
+
+
+
 object_q *get_active_q();
 void print_list(object_q *q, int grab_lock);
 void add_to_list(object_q *q, task_node *t_node);
 int queue_size(object_q *q);
 task_node *remove_head(object_q *q);
+
+meta_q_node_t *find_client_node(meta_q_t *q, int pid); // returns null if none found
+
+void add_to_meta_q(meta_q_t *q, meta_q_node_t *node);
+
+meta_q_node_t *get_next_client_node(meta_q_t *q); // returns null if none found
