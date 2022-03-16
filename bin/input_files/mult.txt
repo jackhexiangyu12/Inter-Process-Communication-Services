@@ -1,0 +1,3 @@
+inputs/Tiny.txt
+inputs/Medi.pdf
+inputs/Huge.jpg

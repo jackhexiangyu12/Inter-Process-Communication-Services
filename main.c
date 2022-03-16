@@ -176,11 +176,7 @@ int grab_segments(seg_data_t ***available_segments, unsigned long file_len) {
 }
 
 void prep_segment_avail_metadata_msg(char *message_buffer, unsigned long file_len, int segments_available_count, seg_data_t ***available_segments) {
-<<<<<<< HEAD
-  printf("pre prep message:: file_len: %lu, segs available (arr len): %d\n", file_len, segments_available_count);
-=======
   db_print("pre prep message:: file_len: %lu, segs available (arr len): %d\n", file_len, segments_available_count);
->>>>>>> cc76769417849aeab0d89934d1a0baa6bdfed483
 
 
   sprintf(message_buffer, "%d,%d,%lu,", mem_info.seg_size, segments_available_count, file_len);
@@ -838,13 +834,8 @@ int main(int argc, char* argv[]) {
    */
   int inx;
   if (argc != 5){
-<<<<<<< HEAD
-    printf("wrong Input usage\nUsage: --n_sms <num_segments> --sms_size <seg_size>");
-    
-=======
     db_print("wrong Input usage\nUsage: --n_sms <num_segments> --sms_size <seg_size>");
 
->>>>>>> cc76769417849aeab0d89934d1a0baa6bdfed483
     return;
   }
 

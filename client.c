@@ -35,26 +35,10 @@ int call_compress( FILE **file1, int is_async, char *filename, int len_ ){
     printf("correct \n");
   }
 
-<<<<<<< HEAD
-  // read in file and put into buffer
-  //Create and open file for send
-  char *filename = argv[1];
-=======
->>>>>>> cc76769417849aeab0d89934d1a0baa6bdfed483
   unsigned char *buffer;
   unsigned long file_len;
   //file1 = fopen("compressed", "w+");
 
-<<<<<<< HEAD
-  //open the file
-  file = fopen(argv[2], "r+");
-  file1 = fopen("compressed", "w+");
-  if (file == NULL) {
-    fprintf(stderr, "Unable to open file %s\n", argv[1]);
-    return 1;
-  }
-=======
->>>>>>> cc76769417849aeab0d89934d1a0baa6bdfed483
 
   //Get file length
   fseek(file, 0, SEEK_END);
@@ -90,6 +74,7 @@ int call_compress( FILE **file1, int is_async, char *filename, int len_ ){
   }
 
   //Testing async call
+  if (is_async)
   printf("This is printing before the program completion\n");
   if (is_async){
     pthread_join(async_id, NULL);
@@ -99,8 +84,8 @@ int call_compress( FILE **file1, int is_async, char *filename, int len_ ){
   }
 
 
-  printf("just finished sync compress. here is the compressed data\n");
-  printf("%s\n", compressed_file_buffer);
+  /* printf("just finished sync compress. here is the compressed data\n");
+  //printf("%s\n", compressed_file_buffer);
 
 
 
@@ -112,15 +97,15 @@ int call_compress( FILE **file1, int is_async, char *filename, int len_ ){
   int snappy_status = snappy_uncompress(compressed_file_buffer, compressed_len, uncomped);
 
 
-  printf("uncompressed, trying to print the uncomped data\n");
-  printf("%s\n", uncomped);
+  //printf("uncompressed, trying to print the uncomped data\n");
+  //printf("%s\n", uncomped);
 
 
 
   snappy_free_env(env);
 
 
-  //fprintf(file1, "The text: %s\n", compressed_file_buffer);
+  //fprintf(file1, "The text: %s\n", compressed_file_buffer); */
 
 
   return 0;
@@ -130,7 +115,7 @@ int main(int argc, char *argv[]) {
   printf("this is the client\n");
   print_stuff();
   if (argc != 5){
-    printf("incorrect number of args\nargs format: ./sample_app --file <input_file> --state <SYNC | ASYNC>");
+    printf("incorrect number of args\nargs format:  --file <input_file> --state <SYNC | ASYNC>");
     return 1;
   }
 
@@ -143,7 +128,7 @@ int main(int argc, char *argv[]) {
   if (strcmp(arg4, "ASYNC" ) == 0) is_async = 1;
   else if (strcmp(arg4, "SYNC" ) == 0) is_async = 0;
   if (is_async == -1){
-    printf("incorrect number of args\nargs format: ./sample_app --file <input_file> --state <SYNC | ASYNC>");
+    printf("incorrect number of args\nargs format:  --file <input_file> --state <SYNC | ASYNC>");
     return 1;
   }
 
@@ -155,7 +140,7 @@ int main(int argc, char *argv[]) {
     multiple = 1;
   }
   else{
-    printf("incorrect number of args\nargs format: ./sample_app --file <input_file> --state <SYNC | ASYNC>");
+    printf("incorrect number of args\nargs format:  --file <input_file> --state <SYNC | ASYNC>");
     return 1;
   }
 
