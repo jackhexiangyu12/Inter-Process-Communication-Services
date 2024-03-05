@@ -173,7 +173,7 @@ void parse_server_message(int **seg_array, char *message_buffer, unsigned long *
   /* db_print("about to return\n"); */
 }
 
-void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_id, int put_q_id) {
+void sendDataToServer(unsigned long file_len, unsigned char *data, int get_q_id, int put_q_id) {
 
   // wait for segment id
 
@@ -197,11 +197,11 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
   // TODO: fix this copy paste garbage
 
   char getQPath[128];
-  sprintf(getQPath, "/%d", get_q_id);
+  sprintf(getQPath, "/%d", getQId);
   mqd_t get_q = mq_open(getQPath, O_RDWR);
 
   char putQPath[128];
-  sprintf(putQPath, "/%d", put_q_id);
+  sprintf(putQPath, "/%d", putQId);
   mqd_t put_q = mq_open(putQPath, O_RDWR);
 
 
@@ -225,8 +225,8 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
 
   // seg_size, seg_array, seg_count
 
-  int segments_needed = (file_len / seg_size);
-  if (file_len % seg_size != 0)
+  int segments_needed = (len / seg_size);
+  if (len % seg_size != 0)
     segments_needed++;
 
   int segments_to_recv = segments_needed;
@@ -258,7 +258,7 @@ void send_data_to_server(unsigned long file_len, unsigned char *data, int get_q_
       int offset = ((j + ii) * seg_size);
       if (segments_to_recv == 0) {
         // TODO: if segments to recv == 0, then instead of seg_size, need to figure out the end of the buffer
-        int len = file_len - offset;
+        int len = len - offset;
         memcpy(sh_mem, data + (offset), len);
       } else {
         memcpy(sh_mem, data + (offset), seg_size);
@@ -497,7 +497,7 @@ char * sync_compress(unsigned char *data, unsigned long file_len, unsigned long 
   // this makes it way easier to implement and is allowed
 
 
-  send_data_to_server(file_len, data, get_q_id, put_q_id);
+    sendDataToServer(file_len, data, get_q_id, put_q_id);
   log_print("[LOG]: finished sending entire file to server\n");
 
 

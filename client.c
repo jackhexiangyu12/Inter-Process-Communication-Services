@@ -1,187 +1,191 @@
-#include <stdio.h>
+//
+// Created by hadoop on 3/4/24.
+//
+
+#include "send_to_server_library.h"
+#include "stdio.h"
 #include <stdlib.h>
-#include <pthread.h>
-#include "client_library.h"
+#include <string.h>
+#include <fcntl.h>
+#include <mqueue.h>
+#include <unistd.h>
+#include <sys/shm.h>
 
-#include "snappy.h"
-int multiple = 0;
+#define SLEEP_TIME (0)
+#define MAX_MESSAGE_LEN_ATTR (1024)
+#define MAX_MESSAGE_LEN (MAX_MESSAGE_LEN_ATTR + 1)
+#define MAX_SEGMENTS_IN_PASS (100)
+#define DEBUG_PRINT (1)
 
-typedef struct async_arg{
-  unsigned long *compressed_len;
-  char *compressed_file_buffer;
-  int file_len;
-  char *buffer;
-} async_arg_t;
-int flag = 0;
-void *async( void *async_data){
-  async_arg_t *data = (async_arg_t*)async_data;
-  data->compressed_file_buffer = sync_compress(data->buffer, data->file_len, &data->compressed_len);
-  flag = 1;
-}
-
-int call_compress( FILE **file1, int is_async, char *filename, int len_ ){
-  int len = len_;
-
-  char buf[len];
-  if (multiple)
-  buf[strcspn(buf, "\n")] = 0;
-  char *f_name = strncpy(buf, filename, len);
-  FILE *file = fopen(buf, "r");
-  if (file == NULL){
-    fprintf(stderr, "Unable to open file 2 %s\n", buf);
-    return 1;
-  }
-  else{
-    printf("correct \n");
-  }
-
-  unsigned char *buffer;
-  unsigned long file_len;
-  //file1 = fopen("compressed", "w+");
-
-
-  //Get file length
-  fseek(file, 0, SEEK_END);
-  file_len=ftell(file);
-  fseek(file, 0, SEEK_SET);
-
-  //Allocate memory
-  buffer = (char *) malloc(file_len);
-  if (!buffer)
-    {
-      fprintf(stderr, "Memory error!");
-      fclose(file);
-      return 1;
+void foo(const char *recv_buff, char *fileLenStr, int *i, int *flInx) {
+    while (recv_buff[(*i)] != ',') {
+        fileLenStr[(*flInx)] = recv_buff[(*i)];
+        (*i)++;
+        (*flInx)++;
     }
-
-  fread(buffer,file_len,sizeof(unsigned char),file);
-  fclose(file);
-
-  char * compressed_file_buffer;
-  unsigned long compressed_len = 0;
-  pthread_t async_id;
-  async_arg_t *async_data = malloc(sizeof(async_arg_t));
-  if (is_async){
-    async_data->buffer = buffer;
-    async_data->compressed_len = &compressed_len;
-    async_data->file_len = file_len;
-    async_data->compressed_file_buffer = compressed_file_buffer;
-    pthread_create(&async_id, NULL, async, (void*)async_data);
-    //printf("This is printing before the program completion\n");
-  }else{
-    flag = 1;
-    compressed_file_buffer = sync_compress(buffer, file_len, &compressed_len);
-  }
-
-  //Testing async call
-  if (is_async)
-  printf("This is printing before the program completion\n");
-  if (is_async){
-    pthread_join(async_id, NULL);
-    compressed_file_buffer = async_data->compressed_file_buffer;
-    file_len = async_data->file_len;
-    compressed_len = async_data->compressed_len;
-  }
-
-
-  /* printf("just finished sync compress. here is the compressed data\n");
-  //printf("%s\n", compressed_file_buffer);
-
-
-
-  struct snappy_env *env = (struct snappy_env *) malloc(sizeof(struct snappy_env));
-  snappy_init_env(env);
-
-  char *uncomped = (char *) malloc(file_len);
-
-  int snappy_status = snappy_uncompress(compressed_file_buffer, compressed_len, uncomped);
-
-
-  //printf("uncompressed, trying to print the uncomped data\n");
-  //printf("%s\n", uncomped);
-
-
-
-  snappy_free_env(env);
-
-
-  //fprintf(file1, "The text: %s\n", compressed_file_buffer); */
-
-
-  return 0;
+}
+int DEBUG_print(const char *format, ...) {
+    if (DEBUG_PRINT > 1) {
+        va_list args;
+        printf(format, args);
+    }
 }
 
-int main(int argc, char *argv[]) {
-  printf("this is the client\n");
-  print_stuff();
-  if (argc != 5){
-    printf("incorrect number of args\nargs format:  --file <input_file> --state <SYNC | ASYNC>");
-    return 1;
-  }
-
-  char *arg1 = argv[1];
-  char *arg2 = argv[2];
-  char *arg3 = argv[3];
-  char *arg4 = argv[4];
-  int is_async = -1; // used to call async
-  int multiple_files; //loop through file and reads
-  if (strcmp(arg4, "ASYNC" ) == 0) is_async = 1;
-  else if (strcmp(arg4, "SYNC" ) == 0) is_async = 0;
-  if (is_async == -1){
-    printf("incorrect number of args\nargs format:  --file <input_file> --state <SYNC | ASYNC>");
-    return 1;
-  }
-
-  if (strcmp(arg1, "--file" ) == 0 && strcmp(arg3, "--state") == 0){
-    multiple_files = 0;
-  }
-  else if (strcmp(arg1, "--files") == 0 && strcmp(arg3, "--state") == 0){
-    multiple_files = 1;
-    multiple = 1;
-  }
-  else{
-    printf("incorrect number of args\nargs format:  --file <input_file> --state <SYNC | ASYNC>");
-    return 1;
-  }
-
-
-
-  // read in file and put into buffer
-  //Create and open file for send
-
-  FILE *file, *file1;
-
-  //open the file
-  file = fopen(argv[2], "r");
-  if (file == NULL) {
-    fprintf(stderr, "Unable to open file %s\n", argv[2]);
-    return 1;
-  }
-  if (multiple_files){
-    FILE *fd_array[256];
-    char *line;
-    int len = 0;
+void sendToServer(unsigned long len, unsigned char *data, int getQId, int putQId) {
+    char getQPath[128];
+    sprintf(getQPath, "/%d", getQId);
+    mqd_t get_q = mq_open(getQPath, O_RDWR);
+    char putQPath[128];
+    sprintf(putQPath, "/%d", putQId);
+    mqd_t put_q = mq_open(putQPath, O_RDWR);
+    sleep(SLEEP_TIME);
+    char recv_buff[MAX_MESSAGE_LEN];
+    int status = mq_receive(get_q, recv_buff, MAX_MESSAGE_LEN, NULL);
+    int seg_count = 0;
+    int seg_size = 0;
+    unsigned long f_len = 0;
+    const char *format = "about to parse this prelim: >>%s<<\n";
+    const char *format1 = "about to parse this prelim: >>%s<<\n";
+    DEBUG_print("about to parse this prelim: >>%s<<\n", recv_buff);
+    DEBUG_print("recv buff message: %s. message len: %lu\n", recv_buff, strlen(recv_buff));
+    int *seg_array = calloc(MAX_SEGMENTS_IN_PASS, sizeof(int));
+    int i = 0;
+    char segSizeStr[64];
+    while (recv_buff[i] != ',') {
+        segSizeStr[i] = recv_buff[i];
+        i++;
+    }
+    segSizeStr[i] = '\0';
+    *&seg_size = atoi(segSizeStr);
+    i++;
+    char segCountStr[64];
+    int indx = 0;
+    foo(recv_buff, segCountStr, &i, &indx);
+    segCountStr[indx] = '\0';
+    i++;
+    *&seg_count = atoi(segCountStr);
+    char fileLenStr[64];
+    int flInx = 0;
+    foo(recv_buff, fileLenStr, &i, &flInx);
+    fileLenStr[flInx] = '\0';
+    i++;
+    char **f;
+    unsigned long fLen = strtoul(fileLenStr, f, 10);
+    *&f_len = fLen;
     int counter = 0;
-    while (getline(&line, &len, file) != -1)
-    {
-      //fd_array[counter] = fopen(line, "r");
-      /*if(fd_array[counter] == NULL){
-        fprintf(stderr, "Unable to open file 1 %s\n", line);
-        return 1;
-      }*/
-      printf("line: %s\n", line);
-      //printf("the len: %d\n", strlen(line));
-      //fputs(len, stdout);
-      call_compress(&fd_array[counter], is_async, line, strlen(line));
-      counter++;
+    for (int index = 0; index < *&seg_count; index++) {
+        char segIdStr[64];
+        int ind;
+        (*&ind) = 0;
+        char segIdStr1[64];
+        foo(recv_buff, segIdStr1, &i, &ind);
+        segIdStr[ind] = '\0';
+        i++;
+        (*&seg_array)[index] = atoi(segIdStr);
+        counter++;
     }
-  }
-  else{
-
-    call_compress(&file, is_async, arg2, strlen(arg2));
-  }
-
-
-
-
+    DEBUG_print("successful parse\n");
+    int segments_needed = (len / seg_size);
+    if (len % seg_size != 0)
+        segments_needed++;
+    int segments_to_recv = segments_needed;
+    int ii = 0;
+    while (ii < segments_needed) {
+        const char *format2;
+        int result;
+        if (DEBUG_PRINT > 1) {
+            va_list args;
+            printf(format2, args);
+        }
+        sleep(SLEEP_TIME);
+        int stat = mq_receive(get_q, recv_buff, MAX_MESSAGE_LEN, NULL);
+        seg_count = 0;
+        seg_size = 0;
+        int i1 = 0;
+        char segSizeStr1[64];
+        while (recv_buff[i1] != ',') {
+            segSizeStr1[i1] = recv_buff[i1];
+            i1++;
+        }
+        segSizeStr1[i1] = '\0';
+        *&seg_size = atoi(segSizeStr1);
+        i1++;
+        char segCountStr1[64];
+        int indx1 = 0;
+        foo(recv_buff, segCountStr1, &i1, &indx1);
+        segCountStr1[indx1] = '\0';
+        i1++;
+        *&seg_count = atoi(segCountStr1);
+        char fileLenStr1[64];
+        int flInx1 = 0;
+        while (recv_buff[i1] != ',') {
+            fileLenStr1[flInx1] = recv_buff[i1];
+            i1++;
+            flInx1++;
+        }
+        fileLenStr1[flInx1] = '\0';
+        i1++;
+        char **f1;
+        unsigned long fLen1 = strtoul(fileLenStr1, f1, 10);
+        *&f_len = fLen1;
+        int counter1 = 0;
+        for (int index = 0; index < *&seg_count; index++) {
+            char segIdStr[64];
+            int ind = 0;
+            foo(recv_buff, segIdStr, &i1, &ind);
+            segIdStr[ind] = '\0';
+            i1++;
+            (*&seg_array)[index] = atoi(segIdStr);
+            counter1++;
+        }
+        const char *format3;
+        int result1;
+        if (DEBUG_PRINT > 1) {
+            va_list args1;
+            printf(format3, args1);
+        }
+        for (int j = 0; j < seg_count; j++) {
+            if (segments_to_recv == 0)
+                break;
+            segments_to_recv--;
+            int segment_id = seg_array[j];
+            char *sh_mem = (char *) shmat(segment_id, NULL, 0);
+            int offset = ((j + ii) * seg_size);
+            if (segments_to_recv == 0) {
+                int len = len - offset;
+                memcpy(sh_mem, data + (offset), len);
+            } else {
+                memcpy(sh_mem, data + (offset), seg_size);
+            }
+        }
+        struct mq_attr attr;
+        mq_getattr(put_q, &attr);
+        DEBUG_print("length of q: %ld\n", attr.mq_curmsgs);
+        DEBUG_print("in main sender loop - sleeping then about to ack server\n");
+        sleep(SLEEP_TIME);
+        const char *format4;
+        int result2;
+        if (DEBUG_PRINT > 1) {
+            va_list args2;
+            printf(format4, args2);
+        }
+        stat = mq_send(put_q, "OKs -- good in send", 3, 0);
+        if (stat == -1) {
+            DEBUG_print(" messeage que is not working idk what num\n");
+        } else {
+            const char *format5;
+            int result3;
+            if (DEBUG_PRINT > 1) {
+                va_list args;
+                printf(format5, args);
+            }
+        }
+        ii += seg_count;
+        DEBUG_print("end of while loop client send\n");
+    }
+    free(seg_array);
+    close(get_q);
+    close(put_q);
 }
+
+
