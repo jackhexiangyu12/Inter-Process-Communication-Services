@@ -3,13 +3,10 @@
 #include "task_queue.h"
 
 
-
 object_q *get_object_q() {
   // nothing function just for filler
   return NULL;
 }
-
-
 
 
 void print_list(object_q *q, int grab_lock) {
