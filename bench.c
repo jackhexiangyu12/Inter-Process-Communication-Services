@@ -20,6 +20,7 @@ typedef unsigned long long counter_t;
 #define sync_core() asm volatile("lfence" ::: "memory")
 #endif
 
+
 #define memeat(x) asm volatile("" :: "r" (x) : "memory")
 
 #define BENCH(name, names, fn, arg)					\
